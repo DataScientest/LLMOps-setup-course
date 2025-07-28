@@ -27,8 +27,10 @@ router_settings:
 
 # 3. General settings for LiteLLM.
 litellm_settings:
+  callbacks: ["mlflow"]
   log_level: DEBUG
 
 # 4. Callback settings for native integrations.
 callback_settings:
-  mlflow: True
+  mlflow:
+    experiment_name: "llmops-new"

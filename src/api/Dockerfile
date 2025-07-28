@@ -16,6 +16,9 @@ COPY src/api/ .
 # Copy tests directory
 COPY tests/ ./tests/
 
+# Copy test traces script
+COPY test_traces.py .
+
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

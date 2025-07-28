@@ -2,8 +2,22 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import requests
 import os
+import mlflow
+import openai
+
 from datetime import datetime
-from typing import List
+from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
+from mlflow.entities import SpanType
+
+# Initialize MLflow tracking
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"))
+
+# Configure OpenAI client to point to LiteLLM proxy
+client = openai.OpenAI(
+    api_key="sk-1234",  # LiteLLM proxy requires any API key
+    base_url=os.getenv("LITELLM_URL", "http://litellm:8000")
+)
 
 # --- Pydantic Models for API requests and responses ---
 class PromptRequest(BaseModel):
@@ -31,10 +45,25 @@ class ModelsResponse(BaseModel):
     object: str
     data: List[ModelInfo]
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage MLflow experiment tracking."""
+    # Enable auto-tracing for LiteLLM
+    mlflow.litellm.autolog()
+    
+    # Set the experiment
+    mlflow.set_experiment("llmops-new")
+    
+    yield
+    
+    # Cleanup resources if needed
+    pass
+
 # --- FastAPI Application Setup ---
 app = FastAPI(
     title="LLMOps API",
-    description="API for interacting with LLMs via LiteLLM's smart router."
+    description="API for interacting with LLMs via LiteLLM's smart router.",
+    lifespan=lifespan
 )
 
 # Get LiteLLM's URL from environment variables, with a default for local dev
@@ -51,46 +80,78 @@ async def health_check():
     """Health check endpoint to verify service status."""
     return {"status": "healthy", "timestamp": datetime.now()}
 
-@app.post("/generate", response_model=PromptResponse)
-async def generate_text(request: PromptRequest):
-    """Generate text by sending a prompt to the LiteLLM router."""
-    payload = {
-        "model": request.model,
-        "messages": [{"role": "user", "content": request.prompt}],
-        "temperature": request.temperature,
-        "max_tokens": request.max_tokens
+@app.get("/debug")
+async def debug_config():
+    """Debug endpoint to show current configuration."""
+    return {
+        "litellm_url": os.getenv("LITELLM_URL", "http://litellm:8000"),
+        "mlflow_uri": os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"),
+        "openai_client_base_url": str(client.base_url),
+        "using_litellm_proxy": True,
+        "timestamp": datetime.now()
     }
 
-    try:
-        # A single call to LiteLLM. It handles fallback and tracing.
-        response = requests.post(
-            f"{LITELLM_URL}/chat/completions",
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=45  # Increased timeout for multiple potential calls
-        )
-        response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
+# Available models from LiteLLM proxy (fallbacks handled by proxy)
+# Models: gpt-4o-primary, gemini-secondary, openrouter-fallback, smart-router
+# smart-router has fallbacks: gemini-secondary -> openrouter-fallback
 
-        data = response.json()
+@app.post("/generate", response_model=PromptResponse)
+@mlflow.trace(name="llm_generation", span_type=SpanType.LLM)
+async def generate_text(prompt_request: PromptRequest):
+    """Generate text using LiteLLM with automatic MLflow tracing."""
+    
+    # Get current span and add attributes
+    span = mlflow.get_current_active_span()
+    if span:
+        span.set_attributes({
+            "request.model": prompt_request.model,
+            "request.temperature": prompt_request.temperature,
+            "request.max_tokens": prompt_request.max_tokens,
+            "request.prompt": prompt_request.prompt[:500]  # First 500 chars
+        })
+    
+    try:
+        # Use OpenAI client pointing to LiteLLM proxy - fallbacks are handled by the proxy
+        response = client.chat.completions.create(
+            model=prompt_request.model,
+            messages=[{"role": "user", "content": prompt_request.prompt}],
+            temperature=prompt_request.temperature,
+            max_tokens=prompt_request.max_tokens
+        )
         
         # Extract details from the successful response
-        completion = data["choices"][0]["message"]["content"]
-        usage = data.get("usage", {})
-        actual_model = data.get("model", request.model)
-        cost = data.get("cost", 0.0)
-
+        completion = response.choices[0].message.content
+        usage = response.usage
+        actual_model = response.model or prompt_request.model
+        
+        # Calculate cost if available (LiteLLM proxy provides this in headers)
+        cost = 0.0  # Will be calculated by LiteLLM proxy
+        
+        # Add response attributes to span
+        if span:
+            span.set_attributes({
+                "response.model": actual_model,
+                "response.prompt_tokens": usage.prompt_tokens,
+                "response.completion_tokens": usage.completion_tokens,
+                "response.total_tokens": usage.total_tokens,
+                "response.cost": cost,
+                "response.content": completion[:500]  # First 500 chars
+            })
+        
         return PromptResponse(
             response=completion,
             model=actual_model,
-            prompt_tokens=usage.get("prompt_tokens", 0),
-            completion_tokens=usage.get("completion_tokens", 0),
-            total_tokens=usage.get("total_tokens", 0),
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens,
             cost=cost
         )
-
-    except requests.exceptions.RequestException as e:
-        # This will catch connection errors, timeouts, and bad status codes.
-        raise HTTPException(status_code=503, detail=f"Failed to communicate with LLM service: {e}")
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=503, 
+            detail=f"LLM request failed: {str(e)}"
+        )
 
 @app.get("/models", response_model=ModelsResponse)
 async def list_models():

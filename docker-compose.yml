@@ -12,8 +12,13 @@ services:
     depends_on:
       - litellm
       - mlflow
+    volumes:
+      - .:/app
+      - ./mlflow-data:/mlflow-data
+    working_dir: /app
     networks:
       - llmops-network
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     # Health check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -23,7 +28,9 @@ services:
 
   # LiteLLM proxy
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+    build:
+      context: .
+      dockerfile: ./litellm/Dockerfile
     ports:
       - "8001:8000"
     environment:
@@ -40,20 +47,29 @@ services:
       - llmops-network
     depends_on:
       - mlflow
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # MLflow for prompt tracing
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.14.1
+    image: ghcr.io/mlflow/mlflow:latest
     ports:
       - "5001:5000"
-    environment:
-      - MLFLOW_BACKEND_STORE_URI=sqlite:///mlflow-data/mlflow.db
-      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow-data/mlruns
     volumes:
       - ./mlflow-data:/mlflow-data
     networks:
       - llmops-network
-    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow-data/mlflow.db --default-artifact-root /mlflow-data/mlruns
+    command: >
+      mlflow server 
+      --host 0.0.0.0 
+      --port 5000 
+      --backend-store-uri sqlite:///mlflow-data/mlflow.db 
+      --default-artifact-root file:///mlflow-data/mlartifacts 
+      --serve-artifacts
 
 networks:
   llmops-network:
