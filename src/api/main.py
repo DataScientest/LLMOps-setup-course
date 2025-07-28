@@ -4,11 +4,13 @@ import requests
 import os
 import mlflow
 import openai
+from litellm import completion_cost
+from mlflow.entities.span import SpanType
+from mlflow.entities.span_event import SpanEvent
 
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
-from mlflow.entities import SpanType
 
 # Initialize MLflow tracking
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"))
@@ -100,46 +102,65 @@ async def debug_config():
 async def generate_text(prompt_request: PromptRequest):
     """Generate text using LiteLLM with automatic MLflow tracing."""
     
-    # Get current span and add attributes
-    span = mlflow.get_current_active_span()
-    if span:
+    # Get the parent span created by the decorator
+    parent_span = mlflow.get_current_active_span()
+
+    # Create child spans for each step
+    with mlflow.start_span("input_processing") as span:
+        span.add_event(SpanEvent("Processing input request", attributes={
+            "model": prompt_request.model,
+            "prompt_preview": prompt_request.prompt[:100]
+        }))
         span.set_attributes({
             "request.model": prompt_request.model,
             "request.temperature": prompt_request.temperature,
             "request.max_tokens": prompt_request.max_tokens,
             "request.prompt": prompt_request.prompt[:500]  # First 500 chars
         })
-    
+
     try:
         # Use OpenAI client pointing to LiteLLM proxy - fallbacks are handled by the proxy
-        response = client.chat.completions.create(
-            model=prompt_request.model,
-            messages=[{"role": "user", "content": prompt_request.prompt}],
-            temperature=prompt_request.temperature,
-            max_tokens=prompt_request.max_tokens
-        )
-        
-        # Extract details from the successful response
-        completion = response.choices[0].message.content
-        usage = response.usage
-        actual_model = response.model or prompt_request.model
-        
-        # Calculate cost if available (LiteLLM proxy provides this in headers)
-        cost = 0.0  # Will be calculated by LiteLLM proxy
-        
-        # Add response attributes to span
-        if span:
+        with mlflow.start_span("llm_call") as span:
+            span.add_event(SpanEvent("Sending request to LiteLLM proxy", attributes={"model": prompt_request.model}))
+            response = client.chat.completions.create(
+                model=prompt_request.model,
+                messages=[{"role": "user", "content": prompt_request.prompt}],
+                temperature=prompt_request.temperature,
+                max_tokens=prompt_request.max_tokens
+            )
+            span.add_event(SpanEvent("Received response from LiteLLM proxy"))
+
+        with mlflow.start_span("output_processing") as span:
+            span.add_event(SpanEvent("Processing LLM response"))
+            # Extract details from the successful response
+            completion_text = response.choices[0].message.content
+            usage = response.usage
+            actual_model = response.model or prompt_request.model
+            
+            # Cost calculation is handled by LiteLLM, using the documented method
+            cost = completion_cost(
+                model=actual_model,
+                prompt=prompt_request.prompt,
+                completion=completion_text
+            ) or 0.0
+            span.add_event(SpanEvent("Calculated cost", attributes={"cost": cost}))
+            
+            # Set attributes on the output processing span
             span.set_attributes({
                 "response.model": actual_model,
-                "response.prompt_tokens": usage.prompt_tokens,
                 "response.completion_tokens": usage.completion_tokens,
+                "response.prompt_tokens": usage.prompt_tokens,
                 "response.total_tokens": usage.total_tokens,
                 "response.cost": cost,
-                "response.content": completion[:500]  # First 500 chars
+                "response.completion_text": completion_text[:500]  # First 500 chars
             })
+
+            # Also add cost to the main parent span for easy visibility
+            if parent_span:
+                parent_span.set_attribute("response.cost", cost)
         
         return PromptResponse(
-            response=completion,
+            response=completion_text,
             model=actual_model,
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
