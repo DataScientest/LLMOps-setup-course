@@ -205,3 +205,48 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Course materials
+courses/
+
+# MLflow
+mlflow-data/
+mlruns/
+
+# Test artifacts
+.test_cache/
+.pytest_cache/
+coverage/
+htmlcov/
+*.coverage
+.coverage.*
+
+# Local development
+.local/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment files (except .env.example)
+.env
+!.env.example
+
+# Local development overrides
+local_settings.py
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Documentation
+docs/_build/
+
+# System Files
+.DS_Store
+Thumbs.db

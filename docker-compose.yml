@@ -1,0 +1,60 @@
+services:
+  # FastAPI application
+  api:
+    build:
+      context: .
+      dockerfile: ./src/api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - LITELLM_URL=http://litellm:8000
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - litellm
+      - mlflow
+    networks:
+      - llmops-network
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # LiteLLM proxy
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "8001:8000"
+    environment:
+      # API Keys for the different models
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      # MLflow configuration for native tracing
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - ./litellm/litellm-config.yaml:/app/config.yaml
+    command: ["--config", "/app/config.yaml", "--port", "8000"]
+    networks:
+      - llmops-network
+    depends_on:
+      - mlflow
+
+  # MLflow for prompt tracing
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.1
+    ports:
+      - "5001:5000"
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=sqlite:///mlflow-data/mlflow.db
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow-data/mlruns
+    volumes:
+      - ./mlflow-data:/mlflow-data
+    networks:
+      - llmops-network
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow-data/mlflow.db --default-artifact-root /mlflow-data/mlruns
+
+networks:
+  llmops-network:
+    driver: bridge
