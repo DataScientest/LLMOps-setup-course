@@ -28,6 +28,8 @@ class PromptRequest(BaseModel):
     model: str = "smart-router"
     temperature: float = 0.7
     max_tokens: int = 150
+    # Optional system prompt to set the behavior/role of the AI
+    system_prompt: Optional[str] = None
 
 class PromptResponse(BaseModel):
     response: str
@@ -115,16 +117,28 @@ async def generate_text(prompt_request: PromptRequest):
             "request.model": prompt_request.model,
             "request.temperature": prompt_request.temperature,
             "request.max_tokens": prompt_request.max_tokens,
-            "request.prompt": prompt_request.prompt[:500]  # First 500 chars
+            "request.prompt": prompt_request.prompt[:500],  # First 500 chars
+            "request.system_prompt": prompt_request.system_prompt[:500] if prompt_request.system_prompt else None,
+            "request.has_system_prompt": bool(prompt_request.system_prompt)
         })
 
     try:
         # Use OpenAI client pointing to LiteLLM proxy - fallbacks are handled by the proxy
         with mlflow.start_span("llm_call") as span:
-            span.add_event(SpanEvent("Sending request to LiteLLM proxy", attributes={"model": prompt_request.model}))
+            # Build messages array - include system prompt if provided
+            messages = []
+            if prompt_request.system_prompt:
+                messages.append({"role": "system", "content": prompt_request.system_prompt})
+            messages.append({"role": "user", "content": prompt_request.prompt})
+            
+            span.add_event(SpanEvent("Sending request to LiteLLM proxy", attributes={
+                "model": prompt_request.model,
+                "has_system_prompt": bool(prompt_request.system_prompt)
+            }))
+            
             response = client.chat.completions.create(
                 model=prompt_request.model,
-                messages=[{"role": "user", "content": prompt_request.prompt}],
+                messages=messages,
                 temperature=prompt_request.temperature,
                 max_tokens=prompt_request.max_tokens
             )
