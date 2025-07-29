@@ -34,7 +34,7 @@ model_list:
 # Configure fallbacks at the router level
 router_settings:
   fallbacks:
-    - "groq-kimi-primary": ["gpt-4o-secondary", "gemini-third", "openrouter-fallback"]
+    - "groq-kimi-primary": ["groq-llama-backup", "gpt-4o-secondary", "gemini-third", "openrouter-fallback"]
 
 litellm_settings:
   callbacks: ["mlflow"]
