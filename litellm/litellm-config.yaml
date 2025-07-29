@@ -1,36 +1,45 @@
-# LiteLLM Proxy Configuration - Correct Fallback Setup
+# LiteLLM Proxy Configuration
 
-# Define each model with a unique name
 model_list:
-  - model_name: gpt-4o-primary
+  # Kimi model via custom OpenAI provider pointing to Groq API
+  - model_name: groq-kimi-primary
+    litellm_params:
+      model: moonshotai/kimi-k2-instruct
+      api_key: os.environ/GROQ_API_KEY
+      api_base: https://api.groq.com/openai/v1
+      custom_llm_provider: openai
+      
+  # Backup Groq model with standard Groq provider
+  - model_name: groq-llama-backup
+    litellm_params:
+      model: groq/llama3-8b-8192
+      api_key: os.environ/GROQ_API_KEY
+      
+  # Fallback models
+  - model_name: gpt-4o-secondary
     litellm_params:
       model: gpt-4o
       api_key: os.environ/OPENAI_API_KEY
-  - model_name: gemini-secondary
+      
+  - model_name: gemini-third
     litellm_params:
       model: gemini/gemini-2.0-flash-exp
       api_key: os.environ/GEMINI_API_KEY
+      
   - model_name: openrouter-fallback
     litellm_params:
       model: openrouter/mistralai/mistral-7b-instruct:free
       api_key: os.environ/OPENROUTER_API_KEY
-  # Define the smart-router alias that uses fallbacks
-  - model_name: smart-router
-    litellm_params:
-      model: gpt-4o
-      api_key: os.environ/OPENAI_API_KEY
 
-# Configure fallback mapping
+# Configure fallbacks at the router level
 router_settings:
-  fallbacks: 
-    - "smart-router": ["gemini-secondary", "openrouter-fallback"]
+  fallbacks:
+    - "groq-kimi-primary": ["groq-llama-backup", "gpt-4o-secondary", "gemini-third", "openrouter-fallback"]
 
-# 3. General settings for LiteLLM.
 litellm_settings:
   callbacks: ["mlflow"]
   log_level: DEBUG
 
-# 4. Callback settings for native integrations.
 callback_settings:
   mlflow:
     experiment_name: "llmops-new"
