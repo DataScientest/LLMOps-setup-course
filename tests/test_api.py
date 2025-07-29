@@ -19,11 +19,11 @@ def print_response(response):
     print("-" * 30)
 
 def test_generate_smart_router():
-    """Test the /generate endpoint with the default smart-router."""
-    print("--- Testing /generate with smart-router ---")
+    """Test the /generate endpoint with the default model."""
+    print("--- Testing /generate with groq-kimi-primary ---")
     payload = {
         "prompt": "What is the capital of France? And what is the most famous monument?",
-        "model": "smart-router"  # This is the default, but we're explicit for clarity
+        "model": "groq-kimi-primary"  # Updated to use available model
     }
     try:
         response = requests.post(f"{BASE_URL}/generate", json=payload, timeout=60)

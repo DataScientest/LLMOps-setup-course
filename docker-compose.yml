@@ -38,6 +38,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
       # MLflow configuration for native tracing
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     volumes:
