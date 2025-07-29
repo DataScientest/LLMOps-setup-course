@@ -62,6 +62,8 @@ class PromptRequest(BaseModel):
     max_tokens: int = 150
     # Optional system prompt to set the behavior/role of the AI
     system_prompt: Optional[str] = None
+    # Optional response format for structured outputs (JSON schema)
+    response_format: Optional[Dict[str, Any]] = None
 
 class PromptResponse(BaseModel):
     response: str
@@ -151,7 +153,9 @@ async def generate_text(prompt_request: PromptRequest):
             "request.max_tokens": prompt_request.max_tokens,
             "request.prompt": prompt_request.prompt[:500],  # First 500 chars
             "request.system_prompt": prompt_request.system_prompt[:500] if prompt_request.system_prompt else None,
-            "request.has_system_prompt": bool(prompt_request.system_prompt)
+            "request.has_system_prompt": bool(prompt_request.system_prompt),
+            "request.response_format": str(prompt_request.response_format) if prompt_request.response_format else None,
+            "request.has_response_format": bool(prompt_request.response_format)
         })
 
     try:
@@ -167,7 +171,8 @@ async def generate_text(prompt_request: PromptRequest):
             
             span.add_event(SpanEvent("Sending request to LiteLLM proxy", attributes={
                 "model": prompt_request.model,
-                "has_system_prompt": bool(prompt_request.system_prompt)
+                "has_system_prompt": bool(prompt_request.system_prompt),
+                "has_response_format": bool(prompt_request.response_format)
             }))
             
             request_payload = {
@@ -176,6 +181,10 @@ async def generate_text(prompt_request: PromptRequest):
                 "temperature": prompt_request.temperature,
                 "max_tokens": prompt_request.max_tokens
             }
+            
+            # Add response_format if provided (for structured outputs)
+            if prompt_request.response_format:
+                request_payload["response_format"] = prompt_request.response_format
             print(f"DEBUG: Request payload: {request_payload}")
             
             litellm_response = requests.post(
