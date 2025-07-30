@@ -37,8 +37,13 @@ router_settings:
     - "groq-kimi-primary": ["groq-llama-backup", "gpt-4o-secondary", "gemini-third", "openrouter-fallback"]
 
 litellm_settings:
-  callbacks: ["mlflow"]
+  callbacks: ["mlflow", "detect_prompt_injection"]
   log_level: DEBUG
+  # Built-in prompt injection detection
+  prompt_injection_params:
+    heuristics_check: true
+    similarity_check: true
+    vector_db_check: false
 
 callback_settings:
   mlflow:

@@ -1,0 +1,157 @@
+# LiteLLM Proxy Configuration with Comprehensive Security (2025)
+# Based on latest LiteLLM security capabilities research
+
+model_list:
+  # Primary models with security guardrails
+  - model_name: groq-kimi-primary
+    litellm_params:
+      model: moonshotai/kimi-k2-instruct
+      api_key: os.environ/GROQ_API_KEY
+      api_base: https://api.groq.com/openai/v1
+      custom_llm_provider: openai
+    # Model-specific security settings
+    litellm_settings:
+      callbacks: ["detect_prompt_injection"] # , "hide_secrets" - Licensed feature
+      
+  # Backup Groq model with standard Groq provider
+  - model_name: groq-llama-backup
+    litellm_params:
+      model: groq/llama3-8b-8192
+      api_key: os.environ/GROQ_API_KEY
+      
+  # Fallback models
+  - model_name: gpt-4o-secondary
+    litellm_params:
+      model: gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+      
+  - model_name: gemini-third
+    litellm_params:
+      model: gemini/gemini-2.0-flash-exp
+      api_key: os.environ/GEMINI_API_KEY
+      
+  - model_name: openrouter-fallback
+    litellm_params:
+      model: openrouter/mistralai/mistral-7b-instruct:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+# Global Security Settings
+litellm_settings:
+  callbacks: ["mlflow", "detect_prompt_injection"] # , "hide_secrets" - Licensed feature
+  log_level: DEBUG
+  
+  # Built-in Prompt Injection Detection
+  prompt_injection_params:
+    heuristics_check: true           # Fast pattern matching
+    similarity_check: true           # Compare against known attacks
+    vector_db_check: false          # Disable for performance
+    
+  # Content moderation settings - Licensed feature
+  # content_moderation: true
+  # content_moderation_threshold: 0.7
+  
+  # Rate limiting at proxy level - Licensed feature
+  # rate_limit:
+  #   rpm: 100                        # Requests per minute
+  #   tpm: 10000                      # Tokens per minute
+
+# Modern Guardrails Configuration (2025) - Most are Licensed features
+# guardrails:
+#   # Primary Security Guard - Prompt Injection Protection - Licensed feature
+#   - guardrail_name: "prompt-injection-guard"
+#     litellm_params:
+#       guardrail: "lakera_prompt_injection"  # Use Lakera if available - Licensed feature
+#       mode: ["pre_call"]
+#       default_on: true
+#       callback_args:
+#         lakera_prompt_injection:
+#           category_thresholds:
+#             "prompt_injection": 0.1
+#             "jailbreak": 0.1
+#           moderation_check: "pre_call"
+#     fallback:
+#       # Fallback to built-in detection if Lakera unavailable
+#       guardrail: "detect_prompt_injection"
+#       
+#   # Secrets Detection and Hiding - Licensed feature
+#   - guardrail_name: "secrets-protection"
+#     litellm_params:
+#       guardrail: "hide_secrets"  # Licensed feature
+#       mode: ["pre_call", "post_call"]
+#       default_on: true
+#       
+#   # PII Detection and Masking - Licensed feature
+#   - guardrail_name: "pii-protection"
+#     litellm_params:
+#       guardrail: "presidio"  # Licensed feature
+#       mode: ["post_call"]
+#       default_on: false
+#       logging_only: true              # Only log, don't block
+#       callback_args:
+#         presidio:
+#           entities: ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD"]
+#           threshold: 0.8
+#           
+#   # Content Moderation with LLMGuard - Licensed feature
+#   - guardrail_name: "content-moderation"
+#     litellm_params:
+#       guardrail: "llmguard_moderations"  # Licensed feature
+#       mode: ["pre_call", "post_call"]
+#       default_on: false               # Enable as needed
+#       callback_args:
+#         llmguard_moderations:
+#           api_base: "http://localhost:8001"  # LLMGuard service URL
+#           
+#   # Llamaguard for additional protection - Licensed feature
+#   - guardrail_name: "llama-guard"
+#     litellm_params:
+#       guardrail: "llamaguard_moderations"  # Licensed feature
+#       mode: ["pre_call", "post_call"]
+#       default_on: false
+#       callback_args:
+#         llamaguard_moderations:
+#           model_name: "meta-llama/LlamaGuard-7b"
+
+# Router Configuration with Security
+router_settings:
+  fallbacks:
+    - "groq-kimi-primary": ["groq-llama-backup", "gpt-4o-secondary", "gemini-third", "openrouter-fallback"]
+  
+  # Security policies - Licensed features
+  # security_settings:
+  #   max_budget_per_user: 100.0      # USD budget limit - Licensed feature
+  #   budget_duration: "1d"           # Daily budget reset - Licensed feature
+  #   max_requests_per_user: 1000     # Request limit per user - Licensed feature
+    
+# Callback Settings
+callback_settings:
+  mlflow:
+    experiment_name: "llmops-security-proxy"
+    
+  # Lakera settings (if using Lakera guardrails) - Licensed feature
+  # lakera_prompt_injection:
+  #   api_key: os.environ/LAKERA_API_KEY
+  #   api_base: "https://api.lakera.ai"
+    
+  # Presidio settings (if using PII detection) - Licensed feature
+  # presidio:
+  #   api_base: "http://localhost:5002"  # Presidio service URL
+    
+  # Custom logging for security events - Licensed feature
+  # security_logging:
+  #   log_file: "/var/log/litellm-security.log"
+  #   log_level: "WARNING"
+  #   include_request_data: true
+
+# Enterprise Security Features - All Licensed features
+# enterprise_settings:
+#   enable_secret_detection: true    # Licensed feature
+#   enable_audit_logging: true       # Licensed feature
+#   enable_compliance_mode: true     # Licensed feature
+#   data_retention_days: 90          # Licensed feature
+
+# Health Check and Monitoring - Licensed features
+# health_check:
+#   enabled: true                    # Licensed feature
+#   endpoint: "/health/security"     # Licensed feature
+#   include_guardrails_status: true  # Licensed feature

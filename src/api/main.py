@@ -22,12 +22,6 @@ LITELLM_URL = os.getenv("LITELLM_URL", "http://litellm:8000")
 # Initialize MLflow tracking
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"))
 
-# Configure OpenAI client to point to LiteLLM proxy
-client = openai.OpenAI(
-    api_key="sk-1234",  # LiteLLM proxy requires any API key
-    base_url=LITELLM_URL
-)
-
 def get_default_model():
     """Get the best available model based on priority."""
     print(f"DEBUG: Getting default model from {LITELLM_URL}")
