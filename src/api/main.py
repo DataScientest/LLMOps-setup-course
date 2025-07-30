@@ -149,18 +149,7 @@ class SecurePromptRequest(BaseModel):
                     "source": "pydantic_validation"
                 })
                 
-                # Also log to MLflow if available
-                try:
-                    with mlflow.start_span("security_validation_block") as span:
-                        span.set_attributes({
-                            "incident_type": "input_validation_blocked",
-                            "pattern_matched": pattern,
-                            "full_prompt": v,
-                            "prompt_length": len(v),
-                            "validation_stage": "pydantic"
-                        })
-                except Exception:
-                    pass  # Don't fail if MLflow is unavailable
+                # MLflow logging removed from validators to avoid duplicate traces
                 
                 raise ValueError(f"Potentially malicious pattern detected in prompt")
         return v
@@ -187,18 +176,7 @@ class SecurePromptRequest(BaseModel):
                     "source": "pydantic_validation"
                 })
                 
-                # Also log to MLflow if available
-                try:
-                    with mlflow.start_span("security_validation_block") as span:
-                        span.set_attributes({
-                            "incident_type": "system_prompt_validation_blocked",
-                            "pattern_matched": pattern,
-                            "full_system_prompt": v,
-                            "prompt_length": len(v),
-                            "validation_stage": "pydantic"
-                        })
-                except Exception:
-                    pass  # Don't fail if MLflow is unavailable
+                # MLflow logging removed from validators to avoid duplicate traces
                 
                 raise ValueError(f"Potentially malicious pattern detected in system prompt")
         return v
@@ -259,14 +237,7 @@ async def security_middleware(request: Request, call_next):
     # Add current request timestamp
     rate_limit_storage[client_ip].append(current_time)
     
-    # Log security event
-    with mlflow.start_span("security_check") as span:
-        span.set_attributes({
-            "client_ip": client_ip,
-            "path": str(request.url.path),
-            "method": request.method,
-            "requests_in_last_minute": len(rate_limit_storage[client_ip])
-        })
+    # Security event logging removed from middleware to avoid duplicate traces
     
     response = await call_next(request)
     return response
@@ -274,8 +245,8 @@ async def security_middleware(request: Request, call_next):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage MLflow experiment tracking and security setup."""
-    # Enable auto-tracing for LiteLLM
-    mlflow.litellm.autolog()
+    # Enable auto-tracing for LiteLLM with silent mode to avoid conflicts
+    #mlflow.litellm.autolog(log_traces=True, silent=True)
     
     # Set the security experiment
     mlflow.set_experiment("llmops-security")
@@ -443,9 +414,21 @@ async def generate_text(prompt_request: SecurePromptRequest):
     # Record request metric
     security_metrics["total_requests"] += 1
     
-    # Get the parent span created by the decorator
-    parent_span = mlflow.get_current_active_span()
-    print(f"DEBUG: Got parent span: {parent_span}")
+    # Get the current span created by the decorator for inputs/outputs
+    current_span = mlflow.get_current_active_span()
+    print(f"DEBUG: Got current span: {current_span}")
+    
+    # Set inputs on the trace for visibility in Request column
+    if current_span:
+        current_span.set_inputs({
+            "model": prompt_request.model,
+            "prompt": prompt_request.prompt,
+            "system_prompt": prompt_request.system_prompt,
+            "temperature": prompt_request.temperature,
+            "max_tokens": prompt_request.max_tokens,
+            "response_format": prompt_request.response_format,
+            "enable_guardrails": prompt_request.enable_guardrails
+        })
 
     # Create child spans for each step
     with mlflow.start_span("input_processing") as span:
@@ -545,12 +528,25 @@ async def generate_text(prompt_request: SecurePromptRequest):
                 "response.completion_text": completion_text[:500]  # First 500 chars
             })
 
-            # Also add cost to the main parent span for easy visibility
-            if parent_span:
-                parent_span.set_attribute("response.cost", cost)
+            # Also add cost to the main current span for easy visibility
+            if current_span:
+                current_span.set_attribute("response.cost", cost)
         
         # Check for guardrails in response
         guardrails_triggered = response_data.get("guardrails_triggered", [])
+        
+        # Set outputs on the trace for visibility in Response column
+        if current_span:
+            current_span.set_outputs({
+                "response": completion_text,
+                "model_used": actual_model,
+                "prompt_tokens": usage["prompt_tokens"],
+                "completion_tokens": usage["completion_tokens"],
+                "total_tokens": usage["total_tokens"],
+                "cost": cost,
+                "security_status": "protected" if prompt_request.enable_guardrails else "unprotected",
+                "guardrails_triggered": guardrails_triggered
+            })
         
         return SecurePromptResponse(
             response=completion_text,
