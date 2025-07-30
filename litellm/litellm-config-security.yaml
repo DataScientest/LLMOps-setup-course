@@ -126,7 +126,8 @@ router_settings:
 # Callback Settings
 callback_settings:
   mlflow:
-    experiment_name: "llmops-security"
+    experiment_name: "llmops-litellm-security"
+    tracking_uri: "http://mlflow:5000"
     
   # Lakera settings (if using Lakera guardrails) - Licensed feature
   # lakera_prompt_injection:
