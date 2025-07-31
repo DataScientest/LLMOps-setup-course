@@ -208,6 +208,7 @@ __marimo__/
 
 # Course materials
 courses/
+mlflow-data/** */
 
 # MLflow
 mlflow-data/

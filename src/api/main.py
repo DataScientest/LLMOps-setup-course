@@ -480,7 +480,7 @@ async def security_middleware(request: Request, call_next):
         })
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error"}
+            content={"detail": "Internal server error. The query was blocked for security reasons"}
         )
 
 @asynccontextmanager
@@ -801,11 +801,15 @@ async def generate_text(prompt_request: SecurePromptRequest):
                 "mlflow.spanType": "LLM"  # Explicitly set span type
             })
             
+            # getting the API key from the environment variable
+            litellm_api_key = os.getenv("LITELLM_API_KEY")
+
+            # 1. Using Litellm to generate completion response using the provided prompt and parameters.
             litellm_response = requests.post(
                 f"{LITELLM_URL}/chat/completions",
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": "Bearer sk-1234"  # LiteLLM proxy requires any API key
+                    "Authorization": f"Bearer {litellm_api_key}"  # LiteLLM proxy requires any API key
                 },
                 json=request_payload
             )

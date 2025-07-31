@@ -38,7 +38,7 @@ model_list:
 # Global Security Settings
 litellm_settings:
   callbacks: ["mlflow", "detect_prompt_injection"] # , "hide_secrets" - Licensed feature
-  log_level: DEBUG
+  set_verbose: true  # Turn off debug logging for production
   
   # Built-in Prompt Injection Detection
   prompt_injection_params:
