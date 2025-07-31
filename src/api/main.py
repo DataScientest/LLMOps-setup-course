@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, field_validator
 import requests
 import os
@@ -19,9 +20,34 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 # Get LiteLLM's URL from environment variables, with a default for local dev
 LITELLM_URL = os.getenv("LITELLM_URL", "http://litellm:8000")
+
+# JWT Configuration
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
+
+# Simple user database (in production, use a real database)
+fake_users_db = {
+    "admin": {
+        "username": "admin",
+        "hashed_password": pwd_context.hash("secret123"),  # password: secret123
+        "role": "admin"
+    },
+    "user": {
+        "username": "user", 
+        "hashed_password": pwd_context.hash("password123"),  # password: password123
+        "role": "user"
+    }
+}
 
 # Initialize MLflow tracking
 mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"))
@@ -73,6 +99,57 @@ def trace_security_incident(incident_type: str, request_data: dict, pattern: str
     except Exception as e:
         print(f"⚠️ Failed to trace security incident: {e}")
         return False
+
+# --- JWT Authentication Functions ---
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash."""
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    """Hash a password."""
+    return pwd_context.hash(password)
+
+def authenticate_user(username: str, password: str) -> Optional[Dict]:
+    """Authenticate a user with username and password."""
+    user = fake_users_db.get(username)
+    if not user or not verify_password(password, user["hashed_password"]):
+        return None
+    return user
+
+def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT access token."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    """Verify and decode JWT token."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        
+        # Check if user still exists
+        user = fake_users_db.get(username)
+        if user is None:
+            raise credentials_exception
+            
+        return {"username": username, "role": user["role"]}
+    except JWTError:
+        raise credentials_exception
 
 def get_default_model():
     """Get the best available model based on priority."""
@@ -362,6 +439,21 @@ class ModelsResponse(BaseModel):
     object: str
     data: List[ModelInfo]
 
+# --- JWT Authentication Models ---
+class UserLogin(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1, max_length=100)
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    expires_in: int
+    user: Dict[str, str]
+
+class UserInfo(BaseModel):
+    username: str
+    role: str
+
 # --- Security Middleware ---
 async def security_middleware(request: Request, call_next):
     """Security middleware with enhanced request validation and rate limiting."""
@@ -579,6 +671,36 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content={"detail": exc.errors()}
     )
+
+# --- Authentication Endpoints ---
+@app.post("/auth/login", response_model=Token)
+async def login(user_credentials: UserLogin):
+    """Authenticate user and return JWT token."""
+    user = authenticate_user(user_credentials.username, user_credentials.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token_expires = timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user["username"], "role": user["role"]}, 
+        expires_delta=access_token_expires
+    )
+    
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
+        user={"username": user["username"], "role": user["role"]}
+    )
+
+@app.get("/auth/me", response_model=UserInfo)
+async def get_current_user(current_user: Dict[str, Any] = Depends(verify_token)):
+    """Get current authenticated user information."""
+    return UserInfo(username=current_user["username"], role=current_user["role"])
 
 # --- API Endpoints ---
 @app.get("/")
@@ -954,6 +1076,293 @@ async def generate_text(prompt_request: SecurePromptRequest):
                         "incident_type": "content_moderation_blocked",
                         "prompt_preview": prompt_request.prompt[:100],
                         "model": prompt_request.model
+                    })
+                
+                raise HTTPException(
+                    status_code=400,
+                    detail="Request blocked by security guardrails: Content moderation triggered"
+                )
+        
+        raise HTTPException(
+            status_code=503, 
+            detail=f"LLM request failed: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=503, 
+            detail=f"LLM request failed: {str(e)}"
+        )
+
+@app.post("/secured-generate", response_model=SecurePromptResponse)
+@mlflow.trace(name="secured_llm_generation", span_type=SpanType.LLM)
+async def secured_generate_text(
+    prompt_request: SecurePromptRequest, 
+    current_user: Dict[str, Any] = Depends(verify_token)
+):
+    """Generate text using LiteLLM with JWT authentication and automatic MLflow tracing."""
+    print(f"DEBUG: Secured endpoint accessed by user: {current_user['username']} with role: {current_user['role']}")
+    print(f"DEBUG: Starting secured_generate_text with model: {prompt_request.model}")
+    print(f"DEBUG: Prompt: {prompt_request.prompt[:100]}")
+    
+    # Record request metric
+    security_metrics["total_requests"] += 1
+    
+    # Get the current span created by the decorator for inputs/outputs
+    current_span = mlflow.get_current_active_span()
+    print(f"DEBUG: Got current span: {current_span}")
+    
+    # Set inputs on the trace for visibility in Request column (including auth info)
+    if current_span:
+        current_span.set_inputs({
+            "model": prompt_request.model,
+            "prompt": prompt_request.prompt,
+            "system_prompt": prompt_request.system_prompt,
+            "temperature": prompt_request.temperature,
+            "max_tokens": prompt_request.max_tokens,
+            "response_format": prompt_request.response_format,
+            "enable_guardrails": prompt_request.enable_guardrails,
+            "authenticated_user": current_user["username"],
+            "user_role": current_user["role"]
+        })
+
+    # Create child spans for each step
+    with mlflow.start_span("input_processing") as span:
+        span.add_event(SpanEvent("Processing authenticated input request", attributes={
+            "model": prompt_request.model,
+            "prompt_preview": prompt_request.prompt[:100],
+            "authenticated_user": current_user["username"],
+            "user_role": current_user["role"]
+        }))
+        span.set_attributes({
+            "request.model": prompt_request.model,
+            "request.temperature": prompt_request.temperature,
+            "request.max_tokens": prompt_request.max_tokens,
+            "request.prompt": prompt_request.prompt[:500],  # First 500 chars
+            "request.system_prompt": prompt_request.system_prompt[:500] if prompt_request.system_prompt else None,
+            "request.has_system_prompt": bool(prompt_request.system_prompt),
+            "request.response_format": str(prompt_request.response_format) if prompt_request.response_format else None,
+            "request.has_response_format": bool(prompt_request.response_format),
+            "auth.user": current_user["username"],
+            "auth.role": current_user["role"],
+            "auth.endpoint": "secured-generate"
+        })
+
+    try:
+        # Use direct HTTP requests to LiteLLM proxy to avoid client compatibility issues
+        with mlflow.start_span("llm_call", span_type=SpanType.LLM) as span:
+            print(f"DEBUG: About to send authenticated request to LiteLLM with model: {prompt_request.model}")
+            
+            # Build messages array - include system prompt if provided
+            messages = []
+            if prompt_request.system_prompt:
+                messages.append({"role": "system", "content": prompt_request.system_prompt})
+            messages.append({"role": "user", "content": prompt_request.prompt})
+            
+            span.add_event(SpanEvent("Sending authenticated request to LiteLLM proxy", attributes={
+                "model": prompt_request.model,
+                "has_system_prompt": bool(prompt_request.system_prompt),
+                "has_response_format": bool(prompt_request.response_format),
+                "authenticated_user": current_user["username"]
+            }))
+            
+            request_payload = {
+                "model": prompt_request.model,
+                "messages": messages,
+                "temperature": prompt_request.temperature,
+                "max_tokens": prompt_request.max_tokens
+            }
+            
+            # Add response_format if provided (for structured outputs)
+            if prompt_request.response_format:
+                request_payload["response_format"] = prompt_request.response_format
+            print(f"DEBUG: Request payload: {request_payload}")
+            
+            # Set LLM span inputs (this will make MLflow recognize it as an LLM call)
+            span.set_inputs({
+                "messages": messages,
+                "model": prompt_request.model,
+                "temperature": prompt_request.temperature,
+                "max_tokens": prompt_request.max_tokens,
+                "response_format": prompt_request.response_format,
+                "authenticated_user": current_user["username"]
+            })
+            
+            # Set LLM-specific attributes for MLflow
+            span.set_attributes({
+                "llm.request.model": prompt_request.model,
+                "llm.request.temperature": prompt_request.temperature,  
+                "llm.request.max_tokens": prompt_request.max_tokens,
+                "llm.usage.prompt_tokens": 0,  # Will update after response
+                "llm.usage.completion_tokens": 0,  # Will update after response
+                "llm.usage.total_tokens": 0,  # Will update after response
+                "mlflow.spanType": "LLM",  # Explicitly set span type
+                "auth.user": current_user["username"],
+                "auth.role": current_user["role"]
+            })
+            
+            # getting the API key from the environment variable
+            litellm_api_key = os.getenv("LITELLM_API_KEY")
+
+            # 1. Using Litellm to generate completion response using the provided prompt and parameters.
+            litellm_response = requests.post(
+                f"{LITELLM_URL}/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {litellm_api_key}"  # LiteLLM proxy requires any API key
+                },
+                json=request_payload
+            )
+            print(f"DEBUG: LiteLLM response status: {litellm_response.status_code}")
+            print(f"DEBUG: LiteLLM response headers: {dict(litellm_response.headers)}")
+            print(f"DEBUG: LiteLLM response text: {litellm_response.text[:500]}")
+            
+            litellm_response.raise_for_status()
+            response_data = litellm_response.json()
+            print(f"DEBUG: Parsed response data: {response_data}")
+            
+            # Extract response details
+            completion_text = response_data["choices"][0]["message"]["content"]
+            usage = response_data["usage"]
+            actual_model = response_data["model"] or prompt_request.model
+            
+            # Set LLM span outputs (this will make MLflow recognize it as an LLM call)
+            span.set_outputs({
+                "choices": [{
+                    "message": {
+                        "role": "assistant",
+                        "content": completion_text
+                    }
+                }],
+                "model": actual_model,
+                "usage": usage
+            })
+            
+            # Update LLM-specific attributes with actual usage
+            span.set_attributes({
+                "llm.response.model": actual_model,
+                "llm.usage.prompt_tokens": usage["prompt_tokens"],
+                "llm.usage.completion_tokens": usage["completion_tokens"],
+                "llm.usage.total_tokens": usage["total_tokens"],
+                "mlflow.spanType": "LLM"  # Ensure span type is maintained
+            })
+            
+            span.add_event(SpanEvent("Received response from LiteLLM proxy", attributes={
+                "response_tokens": usage["completion_tokens"],
+                "total_tokens": usage["total_tokens"],
+                "authenticated_user": current_user["username"]
+            }))
+
+        with mlflow.start_span("output_processing") as span:
+            span.add_event(SpanEvent("Processing authenticated LLM response"))
+            
+            # Cost calculation is handled by LiteLLM, using the documented method
+            try:
+                print(f"DEBUG: Calculating cost for model: {actual_model}")
+                cost = completion_cost(
+                    model=actual_model,
+                    prompt=prompt_request.prompt,
+                    completion=completion_text
+                ) or 0.0
+                print(f"DEBUG: Cost calculated successfully: {cost}")
+            except Exception as e:
+                print(f"DEBUG: Error calculating cost: {e}")
+                cost = 0.0
+            span.add_event(SpanEvent("Calculated cost", attributes={"cost": cost}))
+            
+            # Set attributes on the output processing span
+            span.set_attributes({
+                "response.model": actual_model,
+                "response.completion_tokens": usage["completion_tokens"],
+                "response.prompt_tokens": usage["prompt_tokens"],
+                "response.total_tokens": usage["total_tokens"],
+                "response.cost": cost,
+                "response.completion_text": completion_text[:500],  # First 500 chars
+                "auth.user": current_user["username"],
+                "auth.role": current_user["role"]
+            })
+
+            # Also add cost to the main current span for easy visibility
+            if current_span:
+                current_span.set_attribute("response.cost", cost)
+                current_span.set_attribute("auth.user", current_user["username"])
+        
+        # Check for guardrails in response
+        guardrails_triggered = response_data.get("guardrails_triggered", [])
+        
+        # Set outputs on the trace for visibility in Response column
+        if current_span:
+            current_span.set_outputs({
+                "response": completion_text,
+                "model_used": actual_model,
+                "prompt_tokens": usage["prompt_tokens"],
+                "completion_tokens": usage["completion_tokens"],
+                "total_tokens": usage["total_tokens"],
+                "cost": cost,
+                "security_status": "protected" if prompt_request.enable_guardrails else "unprotected",
+                "guardrails_triggered": guardrails_triggered,
+                "authenticated_user": current_user["username"],
+                "user_role": current_user["role"]
+            })
+        
+        return SecurePromptResponse(
+            response=completion_text,
+            model=actual_model,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+            cost=cost,
+            security_status="protected" if prompt_request.enable_guardrails else "unprotected",
+            guardrails_triggered=guardrails_triggered
+        )
+        
+    except requests.exceptions.HTTPError as e:
+        # Handle security-related errors from LiteLLM
+        if e.response.status_code == 400:
+            error_detail = e.response.text
+            if "prompt injection" in error_detail.lower():
+                # Record security metrics
+                security_metrics["prompt_injections_detected"] += 1
+                security_metrics["blocked_requests"] += 1
+                security_metrics["security_incidents"].append({
+                    "type": "prompt_injection_blocked",
+                    "prompt_preview": prompt_request.prompt[:100],
+                    "model": prompt_request.model,
+                    "authenticated_user": current_user["username"],
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                # Log security event
+                with mlflow.start_span("security_incident") as span:
+                    span.set_attributes({
+                        "incident_type": "prompt_injection_blocked",
+                        "prompt_preview": prompt_request.prompt[:100],
+                        "model": prompt_request.model,
+                        "authenticated_user": current_user["username"]
+                    })
+                
+                raise HTTPException(
+                    status_code=400,
+                    detail="Request blocked by security guardrails: Potential prompt injection detected"
+                )
+            elif "content moderation" in error_detail.lower():
+                # Record security metrics
+                security_metrics["content_moderation_triggered"] += 1
+                security_metrics["blocked_requests"] += 1
+                security_metrics["security_incidents"].append({
+                    "type": "content_moderation_blocked",
+                    "prompt_preview": prompt_request.prompt[:100],
+                    "model": prompt_request.model,
+                    "authenticated_user": current_user["username"],
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                # Log security event
+                with mlflow.start_span("security_incident") as span:
+                    span.set_attributes({
+                        "incident_type": "content_moderation_blocked",
+                        "prompt_preview": prompt_request.prompt[:100],
+                        "model": prompt_request.model,
+                        "authenticated_user": current_user["username"]
                     })
                 
                 raise HTTPException(
