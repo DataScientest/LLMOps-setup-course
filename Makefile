@@ -88,7 +88,7 @@ docs: ## Generate API documentation
 ##@ Monitoring
 
 mlflow: check-env ## Open MLflow UI in browser
-	@open http://localhost:5000
+	@open http://localhost:5001
 
 ##@ API Examples
 
