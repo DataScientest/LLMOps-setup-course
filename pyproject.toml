@@ -3,9 +3,38 @@ name = "llmops-setup-course"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.116.1",
+    "litellm==1.75.7",
+    "mlflow==3.15.1",
     "openai>=1.97.1",
+    "bcrypt>=3.1.3,<4.0.0",
+    "passlib[bcrypt]>=1.7.4",
+    "pydantic>=2.11.7",
+    "python-jose[cryptography]>=3.3.0",
+    "python-multipart>=0.0.6",
     "python-dotenv>=1.1.1",
     "requests>=2.32.4",
+    "uvicorn>=0.35.0",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "flake8>=7.3.0",
+    "isort>=6.0.1",
+    "pdoc>=15.0.4",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "pytest-mock>=3.14.1",
+]
+
+[tool.black]
+target-version = ["py313"]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires the Docker Compose stack and provider credentials",
 ]
