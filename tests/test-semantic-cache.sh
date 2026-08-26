@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -euo pipefail
+API_BASE_URL="${API_BASE_URL:-http://localhost:8000}"
+
 # Couleurs pour l'affichage
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -15,7 +18,7 @@ echo_info "Test spécifique du cache sémantique"
 echo "====================================="
 
 # Get token
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+TOKEN=$(curl --fail --silent -X POST ${API_BASE_URL}/auth/login \
     -H "Content-Type: application/json" \
     -d '{"username": "admin", "password": "secret123"}' \
     | jq -r '.access_token')
@@ -25,10 +28,10 @@ echo_info "Token obtenu: ${TOKEN:0:20}..."
 # Test 1: Premier prompt unique
 echo ""
 echo_info "Test 1: Premier prompt complètement nouveau"
-RESPONSE1=$(curl -s -X POST http://localhost:8000/llm/generate \
+RESPONSE1=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "How can I protect my REST API from attacks?", "max_tokens": 80}')
+    -d '{"model": "groq-qwen-primary", "prompt": "How can I protect my REST API from attacks?", "max_tokens": 80}')
 
 RESPONSE1_TEXT=$(echo $RESPONSE1 | jq -r '.response')
 echo "Réponse 1: $(echo $RESPONSE1_TEXT | head -c 80)..."
@@ -38,10 +41,10 @@ echo ""
 echo_info "Test 2: Prompt sémantiquement similaire (différentes mots)"
 sleep 3  # Attendre que le cache soit indexé
 
-RESPONSE2=$(curl -s -X POST http://localhost:8000/llm/generate \
+RESPONSE2=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "What methods exist to secure a REST API against malicious requests?", "max_tokens": 80}')
+    -d '{"model": "groq-qwen-primary", "prompt": "What methods exist to secure a REST API against malicious requests?", "max_tokens": 80}')
 
 RESPONSE2_TEXT=$(echo $RESPONSE2 | jq -r '.response')
 echo "Réponse 2: $(echo $RESPONSE2_TEXT | head -c 80)..."
@@ -56,10 +59,10 @@ fi
 # Test 3: Prompt complètement différent (pas de cache attendu)
 echo ""
 echo_info "Test 3: Prompt complètement différent (pas de cache attendu)"
-RESPONSE3=$(curl -s -X POST http://localhost:8000/llm/generate \
+RESPONSE3=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "Explain quantum computing concepts", "max_tokens": 80}')
+    -d '{"model": "groq-qwen-primary", "prompt": "Explain quantum computing concepts", "max_tokens": 80}')
 
 RESPONSE3_TEXT=$(echo $RESPONSE3 | jq -r '.response')
 echo "Réponse 3: $(echo $RESPONSE3_TEXT | head -c 80)..."

@@ -83,7 +83,7 @@ Cache thresholds can be adjusted in `src/api/routers/llm.py`:
 1. **Authentication Failed**
    ```bash
    # Check if API is running
-   curl http://localhost:8000/health
+   curl --fail http://localhost:8000/system/health
    ```
 
 2. **Cache Not Working**

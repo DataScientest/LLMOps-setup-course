@@ -42,7 +42,7 @@ def test_structured_output():
     payload = {
         "prompt": f"Extrais les informations de contact du texte suivant: {test_text}",
         "system_prompt": "Tu es un assistant spécialisé dans l'extraction de données. Extrais uniquement les informations demandées au format JSON spécifié.",
-        "model": "groq-kimi-primary",
+        "model": "groq-qwen-primary",
         "temperature": 0.1,
         "max_tokens": 150,
         "response_format": contact_schema
@@ -94,7 +94,7 @@ def test_without_structured_output():
     payload = {
         "prompt": f"Extrais les informations de contact du texte suivant au format JSON: {test_text}",
         "system_prompt": "Tu es un assistant spécialisé dans l'extraction de données. Réponds uniquement en JSON avec les champs nom, email, telephone.",
-        "model": "groq-kimi-primary",
+        "model": "groq-qwen-primary",
         "temperature": 0.1,
         "max_tokens": 150
     }

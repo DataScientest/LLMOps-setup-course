@@ -2,8 +2,15 @@
 # API Test Suite (Exact & Semantic Cache)
 # =============================================================================
 
+API_PORT ?= 8000
+LITELLM_PORT ?= 8001
+MLFLOW_PORT ?= 5001
+QDRANT_HTTP_PORT ?= 6333
+TEI_PORT ?= 8080
+API_BASE_URL ?= http://localhost:$(API_PORT)
+
 # Get JWT token (valid for 1 hour)
-TOKEN := $(shell curl -s -X POST http://localhost:8000/auth/login \
+TOKEN := $(shell curl --fail --silent -X POST $(API_BASE_URL)/auth/login \
 	-H "Content-Type: application/json" \
 	-d '{"username": "admin", "password": "secret123"}' \
 	| jq -r '.access_token')
@@ -22,18 +29,18 @@ test-exact-cache:
 	@echo "🚀 Running Exact Cache Test..."
 	@echo $(SEPARATOR)
 	@echo "🔍 Test 1: First call (no cache)"
-	@curl -s -X POST http://localhost:8000/llm/generate \
+	@curl --fail --silent -X POST $(API_BASE_URL)/llm/generate \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $(TOKEN)" \
-		-d '{"model": "groq-kimi-primary", "prompt": "Why the sky is blue?", "max_tokens": 10}' \
+		-d '{"model": "groq-qwen-primary", "prompt": "Why the sky is blue?", "max_tokens": 10}' \
 		| jq -C '.'
 	@echo ""
 	@echo "🎯 Test 2: Second call (exact cache hit expected)"
 	@sleep 2 # Allow time for cache to write
-	@curl -s -X POST http://localhost:8000/llm/generate \
+	@curl --fail --silent -X POST $(API_BASE_URL)/llm/generate \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $(TOKEN)" \
-		-d '{"model": "groq-kimi-primary", "prompt": "Why the sky is blue?", "max_tokens": 10}' \
+		-d '{"model": "groq-qwen-primary", "prompt": "Why the sky is blue?", "max_tokens": 10}' \
 		| jq -C '.'
 	@echo $(SEPARATOR)
 
@@ -45,18 +52,18 @@ test-semantic-cache:
 	@echo "🚀 Running Semantic Cache Test..."
 	@echo $(SEPARATOR)
 	@echo "🔍 Test 1: First call (no cache)"
-	@curl -s -X POST http://localhost:8000/llm/generate \
+	@curl --fail --silent -X POST $(API_BASE_URL)/llm/generate \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $(TOKEN)" \
-		-d '{"model": "groq-kimi-primary", "prompt": "Explain the importance of data encryption at rest.", "max_tokens": 80}' \
+		-d '{"model": "groq-qwen-primary", "prompt": "Explain the importance of data encryption at rest.", "max_tokens": 80}' \
 		| jq -C '.'
 	@echo ""
 	@echo "🎯 Test 2: Semantically similar call (semantic cache hit expected)"
 	@sleep 3 # Allow time for cache to write
-	@curl -s -X POST http://localhost:8000/llm/generate \
+	@curl --fail --silent -X POST $(API_BASE_URL)/llm/generate \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $(TOKEN)" \
-		-d '{"model": "groq-kimi-primary", "prompt": "Why is it crucial to encrypt stored data?", "max_tokens": 80}' \
+		-d '{"model": "groq-qwen-primary", "prompt": "Why is it crucial to encrypt stored data?", "max_tokens": 80}' \
 		| jq -C '.'
 	@echo $(SEPARATOR)
 
@@ -86,20 +93,20 @@ test-semantic-detailed:
 
 clear-cache:
 	@echo "🧹 Clearing all caches..."
-	@TOKEN=$(shell curl -s -X POST http://localhost:8000/auth/login \
+	@TOKEN=$(shell curl --fail --silent -X POST $(API_BASE_URL)/auth/login \
 		-H "Content-Type: application/json" \
 		-d '{"username": "admin", "password": "secret123"}' \
 		| jq -r '.access_token'); \
-	curl -s -X DELETE "http://localhost:8000/llm/cache/clear" \
+	curl --fail --silent -X DELETE "$(API_BASE_URL)/llm/cache/clear" \
 		-H "Authorization: Bearer $$TOKEN" | jq '.'
 
 cache-stats:
 	@echo "📊 Cache statistics..."
-	@TOKEN=$(shell curl -s -X POST http://localhost:8000/auth/login \
+	@TOKEN=$(shell curl --fail --silent -X POST $(API_BASE_URL)/auth/login \
 		-H "Content-Type: application/json" \
 		-d '{"username": "admin", "password": "secret123"}' \
 		| jq -r '.access_token'); \
-	curl -s -X GET "http://localhost:8000/llm/cache/stats" \
+	curl --fail --silent -X GET "$(API_BASE_URL)/llm/cache/stats" \
 		-H "Authorization: Bearer $$TOKEN" | jq '.'
 
 # =============================================================================
@@ -109,22 +116,22 @@ cache-stats:
 check-qdrant:
 	@echo "🔍 Checking Qdrant status..."
 	@echo "API Health:"
-	@curl -s "http://localhost:6333/health" | jq '.'
+	@curl --fail --silent "http://localhost:$(QDRANT_HTTP_PORT)/readyz"
 	@echo "Collections:"
-	@curl -s "http://localhost:6333/collections" | jq '.result.collections[].name'
+	@curl --fail --silent "http://localhost:$(QDRANT_HTTP_PORT)/collections" | jq '.result.collections[].name'
 
 check-mlflow:
 	@echo "📊 Checking MLflow traces..."
-	@curl -s "http://localhost:5001/api/2.0/mlflow/traces?experiment_ids=1" \
+	@curl --fail --silent "http://localhost:$(MLFLOW_PORT)/api/2.0/mlflow/traces?experiment_ids=1" \
 		| jq '.traces | length' | xargs echo "Number of traces:"
 
 check-tei:
 	@echo "🔤 Checking TEI embeddings service..."
-	@curl -s "http://localhost:8080/health" | jq '.'
+	@curl --fail --silent "http://localhost:$(TEI_PORT)/health" | jq '.'
 
 check-litellm:
 	@echo "🤖 Checking LiteLLM proxy..."
-	@curl -s "http://localhost:8001/health" | jq '.'
+	@curl --fail --silent "http://localhost:$(LITELLM_PORT)/health" | jq '.'
 
 status:
 	@echo "🏥 System Status Check"

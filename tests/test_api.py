@@ -1,66 +1,53 @@
+"""End-to-end API checks for the Docker Compose stack."""
+
+import os
+
+import pytest
 import requests
-import json
 
-# Configuration
-BASE_URL = "http://localhost:8000"
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+pytestmark = pytest.mark.integration
 
-def print_response(response):
-    """Helper function to print formatted JSON response."""
-    print(f"Status Code: {response.status_code}")
-    try:
-        # Pretty-print the JSON response
-        data = response.json()
-        print(f"Response JSON: {json.dumps(data, indent=2)}")
-        # Check for the new 'cost' field
-        if 'cost' in data and data['cost'] is not None:
-            print(f"LLM call cost: ${data['cost']:.6f}")
-    except (json.JSONDecodeError, KeyError):
-        print(f"Response Text: {response.text}")
-    print("-" * 30)
 
-def test_generate_smart_router():
-    """Test the /generate endpoint with the default model."""
-    print("--- Testing /generate with groq-kimi-primary ---")
-    payload = {
-        "prompt": "What is the capital of France? And what is the most famous monument?",
-        "model": "groq-kimi-primary"  # Updated to use available model
-    }
-    try:
-        response = requests.post(f"{BASE_URL}/generate", json=payload, timeout=60)
-        print_response(response)
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
-        print("-" * 30)
+@pytest.fixture(scope="module")
+def auth_headers():
+    response = requests.post(
+        f"{BASE_URL}/auth/login",
+        json={"username": "admin", "password": "secret123"},
+        timeout=10,
+    )
+    response.raise_for_status()
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
-def test_generate_specific_model():
-    """Test the /generate endpoint with a specific model from the router."""
-    print("--- Testing /generate with gemini-secondary model ---")
-    payload = {
-        "prompt": "Explain the theory of relativity in one simple sentence.",
-        "model": "gemini-secondary"
-    }
-    try:
-        response = requests.post(f"{BASE_URL}/generate", json=payload, timeout=60)
-        print_response(response)
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
-        print("-" * 30)
+
+def test_health():
+    response = requests.get(f"{BASE_URL}/system/health", timeout=10)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "healthy"
+
 
 def test_list_models():
-    """Test the /models endpoint to see all available models."""
-    print("--- Testing /models endpoint ---")
-    try:
-        response = requests.get(f"{BASE_URL}/models", timeout=30)
-        print_response(response)
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
-        print("-" * 30)
+    response = requests.get(f"{BASE_URL}/llm/models", timeout=30)
 
-if __name__ == "__main__":
-    print("Starting API tests...")
-    print("Please ensure Docker containers are running with 'docker-compose up -d'\n")
-    test_generate_smart_router()
-    test_generate_specific_model()
-    test_list_models()
-    print("API tests completed.")
-    print("Check the MLflow UI at http://localhost:5000 to see the traced prompts.")
+    response.raise_for_status()
+    assert "groq-qwen-primary" in str(response.json())
+
+
+def test_generate_with_primary_model(auth_headers):
+    response = requests.post(
+        f"{BASE_URL}/llm/generate",
+        headers=auth_headers,
+        json={
+            "prompt": "Reply with exactly: LLMOps E2E OK",
+            "model": "groq-qwen-primary",
+            "temperature": 0,
+            "max_tokens": 20,
+        },
+        timeout=90,
+    )
+
+    response.raise_for_status()
+    payload = response.json()
+    assert payload["response"]
+    assert payload["model"]

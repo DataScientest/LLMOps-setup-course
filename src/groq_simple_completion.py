@@ -4,12 +4,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def generate_with_groq(prompt, model="llama3-8b-8192"):
+def generate_with_groq(prompt, model="qwen/qwen3.6-27b"):
     """Generate text using Groq models.
     
     Args:
         prompt (str): The input prompt for text generation
-        model (str): Groq model name (default: llama3-8b-8192)
+        model (str): Groq model name (default: qwen/qwen3.6-27b)
     
     Returns:
         str: Generated text response
@@ -40,5 +40,5 @@ def generate_with_groq(prompt, model="llama3-8b-8192"):
 # Example usage
 if __name__ == "__main__":
     user_prompt = "Explain quantum computing in simple terms."
-    result = generate_with_groq(user_prompt, model="moonshotai/kimi-k2-instruct")
+    result = generate_with_groq(user_prompt, model="qwen/qwen3.6-27b")
     print(result)

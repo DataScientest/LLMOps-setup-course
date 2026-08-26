@@ -6,7 +6,7 @@ from mlflow.tracking import MlflowClient
 
 
 
-try:
+def main():
     # Create client
     client = MlflowClient()
     
@@ -40,5 +40,5 @@ try:
         except Exception as e:
             print(f"Error searching traces in experiment {exp.experiment_id}: {e}")
 
-except Exception as e:
-    print(f"Error connecting to MLflow: {e}")
+if __name__ == "__main__":
+    main()

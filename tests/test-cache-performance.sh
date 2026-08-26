@@ -1,10 +1,13 @@
 #!/bin/bash
 
+set -euo pipefail
+API_BASE_URL="${API_BASE_URL:-http://localhost:8000}"
+
 echo "🚀 Cache Performance Benchmark"
 echo "=============================="
 
 # Get token
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+TOKEN=$(curl --fail --silent -X POST ${API_BASE_URL}/auth/login \
     -H "Content-Type: application/json" \
     -d '{"username": "admin", "password": "secret123"}' \
     | jq -r '.access_token')
@@ -19,7 +22,7 @@ echo "🔐 Token obtained: ${TOKEN:0:20}..."
 # Clear cache before test
 echo ""
 echo "🧹 Clearing cache for clean benchmark..."
-curl -s -X DELETE "http://localhost:8000/llm/cache/clear" \
+curl --fail --silent -X DELETE "${API_BASE_URL}/llm/cache/clear" \
     -H "Authorization: Bearer $TOKEN" > /dev/null
 
 echo ""
@@ -28,22 +31,22 @@ echo "=================================="
 
 # First call - no cache
 echo -n "⏱️  First call (no cache): "
-TIME1=$(curl -s -w "%{time_total}" -o /tmp/response1.json \
-    -X POST http://localhost:8000/llm/generate \
+TIME1=$(curl --fail --silent -w "%{time_total}" -o /tmp/response1.json \
+    -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "What is machine learning?", "max_tokens": 50}')
+    -d '{"model": "groq-qwen-primary", "prompt": "What is machine learning?", "max_tokens": 50}')
 echo "${TIME1}s"
 
 sleep 2  # Allow cache to write
 
 # Second call - exact cache
 echo -n "⚡ Second call (exact cache): "
-TIME2=$(curl -s -w "%{time_total}" -o /tmp/response2.json \
-    -X POST http://localhost:8000/llm/generate \
+TIME2=$(curl --fail --silent -w "%{time_total}" -o /tmp/response2.json \
+    -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "What is machine learning?", "max_tokens": 50}')
+    -d '{"model": "groq-qwen-primary", "prompt": "What is machine learning?", "max_tokens": 50}')
 echo "${TIME2}s"
 
 # Calculate improvement
@@ -56,22 +59,22 @@ echo "====================================="
 
 # First call - new prompt
 echo -n "⏱️  First call (no cache): "
-TIME3=$(curl -s -w "%{time_total}" -o /tmp/response3.json \
-    -X POST http://localhost:8000/llm/generate \
+TIME3=$(curl --fail --silent -w "%{time_total}" -o /tmp/response3.json \
+    -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "Explain artificial intelligence concepts", "max_tokens": 50}')
+    -d '{"model": "groq-qwen-primary", "prompt": "Explain artificial intelligence concepts", "max_tokens": 50}')
 echo "${TIME3}s"
 
 sleep 3  # Allow semantic cache to index
 
 # Second call - semantically similar
 echo -n "⚡ Similar call (semantic cache): "
-TIME4=$(curl -s -w "%{time_total}" -o /tmp/response4.json \
-    -X POST http://localhost:8000/llm/generate \
+TIME4=$(curl --fail --silent -w "%{time_total}" -o /tmp/response4.json \
+    -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "What are the fundamentals of AI?", "max_tokens": 50}')
+    -d '{"model": "groq-qwen-primary", "prompt": "What are the fundamentals of AI?", "max_tokens": 50}')
 echo "${TIME4}s"
 
 # Calculate improvement for semantic

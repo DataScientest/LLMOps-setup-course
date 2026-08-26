@@ -1,10 +1,13 @@
 #!/bin/bash
 
+set -euo pipefail
+API_BASE_URL="${API_BASE_URL:-http://localhost:8000}"
+
 echo "🔍 Cache Test with Log Verification"
 echo "==================================="
 
 # Get token
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+TOKEN=$(curl --fail --silent -X POST ${API_BASE_URL}/auth/login \
     -H "Content-Type: application/json" \
     -d '{"username": "admin", "password": "secret123"}' \
     | jq -r '.access_token')
@@ -36,10 +39,10 @@ echo "============================"
 INITIAL_LOGS=$(docker logs llmops-setup-course-api-1 2>&1 | wc -l)
 
 echo "🔍 Making first call (should create cache entry)..."
-RESPONSE1=$(curl -s -X POST http://localhost:8000/llm/generate \
+RESPONSE1=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "What is Docker?", "max_tokens": 30}')
+    -d '{"model": "groq-qwen-primary", "prompt": "What is Docker?", "max_tokens": 30}')
 
 echo "Response: $(echo $RESPONSE1 | jq -r '.response' | head -c 50)..."
 
@@ -47,10 +50,10 @@ sleep 2
 
 echo ""
 echo "🎯 Making second identical call (should hit exact cache)..."
-RESPONSE2=$(curl -s -X POST http://localhost:8000/llm/generate \
+RESPONSE2=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "What is Docker?", "max_tokens": 30}')
+    -d '{"model": "groq-qwen-primary", "prompt": "What is Docker?", "max_tokens": 30}')
 
 echo "Response: $(echo $RESPONSE2 | jq -r '.response' | head -c 50)..."
 
@@ -64,10 +67,10 @@ echo "🧠 Test 2: Semantic Cache Demo"
 echo "==============================="
 
 echo "🔍 Making first semantic call..."
-RESPONSE3=$(curl -s -X POST http://localhost:8000/llm/generate \
+RESPONSE3=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "How does containerization technology work?", "max_tokens": 30}')
+    -d '{"model": "groq-qwen-primary", "prompt": "How does containerization technology work?", "max_tokens": 30}')
 
 echo "Response: $(echo $RESPONSE3 | jq -r '.response' | head -c 50)..."
 
@@ -75,10 +78,10 @@ sleep 3
 
 echo ""
 echo "🎯 Making semantically similar call..."
-RESPONSE4=$(curl -s -X POST http://localhost:8000/llm/generate \
+RESPONSE4=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-kimi-primary", "prompt": "Explain container virtualization concepts", "max_tokens": 30}')
+    -d '{"model": "groq-qwen-primary", "prompt": "Explain container virtualization concepts", "max_tokens": 30}')
 
 echo "Response: $(echo $RESPONSE4 | jq -r '.response' | head -c 50)..."
 

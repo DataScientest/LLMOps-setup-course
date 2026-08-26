@@ -5,15 +5,18 @@ Tests both exact and semantic caching functionality
 """
 
 import asyncio
+import os
 import httpx
+import pytest
 import json
 import time
 from typing import Dict, Any
 
 # Configuration
-API_BASE_URL = "http://api:8000"
-LITELLM_URL = "http://litellm:4000"
-QDRANT_URL = "http://qdrant:6333"
+API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
+LITELLM_URL = os.getenv("LITELLM_URL", "http://litellm:4000")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
+pytestmark = pytest.mark.integration
 
 # Test credentials
 USERNAME = "admin"
@@ -74,7 +77,7 @@ async def test_exact_cache():
     # Test prompt
     test_request = {
         "prompt": "What is the capital of France?",
-        "model": "groq-kimi-primary",
+        "model": "groq-qwen-primary",
         "temperature": 0.7,
         "max_tokens": 100
     }
@@ -138,14 +141,14 @@ async def test_semantic_cache():
     
     test_request1 = {
         "prompt": prompt1,
-        "model": "groq-kimi-primary",
+        "model": "groq-qwen-primary",
         "temperature": 0.7,
         "max_tokens": 100
     }
     
     test_request2 = {
         "prompt": prompt2,
-        "model": "groq-kimi-primary",
+        "model": "groq-qwen-primary",
         "temperature": 0.7,
         "max_tokens": 100
     }
