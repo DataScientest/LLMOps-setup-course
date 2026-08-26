@@ -1,8 +1,10 @@
-import requests
 import json
+
+import requests
 
 # Configuration
 BASE_URL = "http://localhost:8000"
+
 
 def print_response(response):
     """Helper function to print formatted JSON response."""
@@ -12,18 +14,21 @@ def print_response(response):
         data = response.json()
         print(f"Response JSON: {json.dumps(data, indent=2)}")
         # Check for the new 'cost' field
-        if 'cost' in data and data['cost'] is not None:
+        if "cost" in data and data["cost"] is not None:
             print(f"LLM call cost: ${data['cost']:.6f}")
     except (json.JSONDecodeError, KeyError):
         print(f"Response Text: {response.text}")
     print("-" * 30)
 
+
 def test_generate_smart_router():
     """Test the /generate endpoint with the default model."""
-    print("--- Testing /generate with groq-kimi-primary ---")
+    print("--- Testing /generate with groq-qwen-primary ---")
     payload = {
-        "prompt": "What is the capital of France? And what is the most famous monument?",
-        "model": "groq-kimi-primary"  # Updated to use available model
+        "prompt": (
+            "What is the capital of France? " "And what is the most famous monument?"
+        ),
+        "model": "groq-qwen-primary",
     }
     try:
         response = requests.post(f"{BASE_URL}/generate", json=payload, timeout=60)
@@ -31,13 +36,14 @@ def test_generate_smart_router():
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
         print("-" * 30)
+
 
 def test_generate_specific_model():
     """Test the /generate endpoint with a specific model from the router."""
     print("--- Testing /generate with gemini-secondary model ---")
     payload = {
         "prompt": "Explain the theory of relativity in one simple sentence.",
-        "model": "gemini-secondary"
+        "model": "gemini-secondary",
     }
     try:
         response = requests.post(f"{BASE_URL}/generate", json=payload, timeout=60)
@@ -45,6 +51,7 @@ def test_generate_specific_model():
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
         print("-" * 30)
+
 
 def test_list_models():
     """Test the /models endpoint to see all available models."""
@@ -56,11 +63,12 @@ def test_list_models():
         print(f"An error occurred: {e}")
         print("-" * 30)
 
+
 if __name__ == "__main__":
     print("Starting API tests...")
-    print("Please ensure Docker containers are running with 'docker-compose up -d'\n")
+    print("Please ensure Docker containers are running with 'docker compose up -d'\n")
     test_generate_smart_router()
     test_generate_specific_model()
     test_list_models()
     print("API tests completed.")
-    print("Check the MLflow UI at http://localhost:5000 to see the traced prompts.")
+    print("Check the MLflow UI at http://localhost:5001 to see the traced prompts.")
