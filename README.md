@@ -1,6 +1,6 @@
 # LLMOps Setup Course
 
-This repository demonstrates a production-ready LLM application with model fallback, monitoring, and testing.
+This repository demonstrates an LLM application with model fallback, monitoring, and testing.
 
 ## Architecture
 
@@ -11,10 +11,10 @@ This repository demonstrates a production-ready LLM application with model fallb
 ## Prerequisites
 
 - Docker and Docker Compose
+- uv
 - API keys for:
-  - OpenAI (GPT-4o)
-  - Gemini 2.0 Flash
-  - OpenRouter (Mistral 7B fallback)
+  - Groq (required for the primary Qwen model)
+  - OpenAI, Gemini, and OpenRouter (optional routes)
 
 ## Quick Start
 
@@ -22,17 +22,18 @@ This repository demonstrates a production-ready LLM application with model fallb
    ```bash
    cp env.example .env
    # Edit .env with your API keys
+   uv sync --frozen
    ```
 
 2. Start services:
    ```bash
-   docker-compose up -d --build
+   docker compose up -d --build --wait
    ```
 
 3. Access services:
    - API: http://localhost:8000
    - LiteLLM: http://localhost:8001
-   - MLflow UI: http://localhost:5000
+   - MLflow UI: http://localhost:5001
 
 ## API Endpoints
 
@@ -43,7 +44,7 @@ Content-Type: application/json
 
 {
   "prompt": "Your prompt here",
-  "model": "smart-router",  # Uses cascade fallback
+  "model": "groq-qwen-primary",
   "temperature": 0.7
 }
 ```
@@ -60,11 +61,10 @@ GET /health
 
 ## Model Fallback Strategy
 
-1. **Primary**: `gpt-4o-primary` (OpenAI GPT-4o)
-2. **Secondary**: `gemini-secondary` (Gemini 2.0 Flash)
-3. **Fallback**: `openrouter-fallback` (Mistral 7B via OpenRouter)
+1. **Primary**: `groq-qwen-primary` (`qwen/qwen3.6-27b`)
+2. **Fallback**: `groq-gpt-oss-backup` (`openai/gpt-oss-20b`)
 
-Use `smart-router` model name to enable automatic fallback.
+The other provider routes remain available explicitly when their keys are configured.
 
 ## Monitoring with MLflow
 
@@ -72,9 +72,9 @@ All LLM calls are tracked with:
 - Input/Output parameters
 - Token usage and latency
 - Success/Failure status
-- Full prompt/response history
+- Request metadata and trace status
 
-Access the MLflow UI at `http://localhost:5000`
+Access the MLflow UI at `http://localhost:5001`
 
 ## Project Structure
 
@@ -82,8 +82,9 @@ Access the MLflow UI at `http://localhost:5000`
 .
 ├── docker-compose.yml      # Service definitions
 ├── litellm-config.yaml    # LiteLLM model configuration
-├── .env.example           # Template for environment variables
-├── test-requirements.txt  # Testing dependencies
+├── env.example            # Template for environment variables
+├── pyproject.toml         # Python dependencies managed by uv
+├── uv.lock                # Validated dependency lock
 ├── tests/                 # Integration tests
 ├── mlflow-data/           # MLflow experiment data
 └── src/
@@ -95,19 +96,19 @@ Access the MLflow UI at `http://localhost:5000`
 ## Development
 
 ### Running Tests
-Tests run inside the container:
+Tests run through the locked uv environment:
 ```bash
-docker-compose exec api pytest /app/tests/
+uv run --frozen pytest
 ```
 
 ### Stopping Services
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### Viewing Logs
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ## Data Persistence
