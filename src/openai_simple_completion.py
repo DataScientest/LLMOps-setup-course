@@ -1,13 +1,13 @@
-import openai
 import os
+
+import openai
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Initialize OpenAI client
-client = openai.OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 
 # Generate text using GPT-4o
 def generate_with_gpt4o(prompt):
@@ -15,9 +15,10 @@ def generate_with_gpt4o(prompt):
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
-        max_tokens=500
+        max_tokens=500,
     )
     return response.choices[0].message.content
+
 
 # Example usage
 if __name__ == "__main__":
