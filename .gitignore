@@ -212,6 +212,7 @@ mlflow-data/** */
 
 # MLflow
 mlflow-data/
+mlflow.db
 mlruns/
 
 # Test artifacts

@@ -3,20 +3,18 @@
 
 model_list:
   # Primary models with security guardrails
-  - model_name: groq-kimi-primary
+  - model_name: groq-qwen-primary
     litellm_params:
-      model: moonshotai/kimi-k2-instruct
+      model: groq/qwen/qwen3.6-27b
       api_key: os.environ/GROQ_API_KEY
-      api_base: https://api.groq.com/openai/v1
-      custom_llm_provider: openai
     # Model-specific security settings
     litellm_settings:
       callbacks: ["detect_prompt_injection"] # , "hide_secrets" - Licensed feature
       
   # Backup Groq model with standard Groq provider
-  - model_name: groq-llama-backup
+  - model_name: groq-gpt-oss-backup
     litellm_params:
-      model: groq/llama3-8b-8192
+      model: groq/openai/gpt-oss-20b
       api_key: os.environ/GROQ_API_KEY
       
   # Fallback models
@@ -38,7 +36,7 @@ model_list:
 # Global Security Settings
 litellm_settings:
   callbacks: ["mlflow", "detect_prompt_injection"] # , "hide_secrets" - Licensed feature
-  set_verbose: true  # Turn off debug logging for production
+  log_level: INFO
   
   # Built-in Prompt Injection Detection
   prompt_injection_params:
@@ -115,7 +113,7 @@ litellm_settings:
 # Router Configuration with Security
 router_settings:
   fallbacks:
-    - "groq-kimi-primary": ["groq-llama-backup", "gpt-4o-secondary", "gemini-third", "openrouter-fallback"]
+    - "groq-qwen-primary": ["groq-gpt-oss-backup"]
   
   # Security policies - Licensed features
   # security_settings:
