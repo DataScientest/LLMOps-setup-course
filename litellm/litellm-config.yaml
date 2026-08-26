@@ -1,18 +1,16 @@
 # LiteLLM Proxy Configuration
 
 model_list:
-  # Kimi model via custom OpenAI provider pointing to Groq API
-  - model_name: groq-kimi-primary
+  # Primary Qwen model through Groq
+  - model_name: groq-qwen-primary
     litellm_params:
-      model: moonshotai/kimi-k2-instruct
+      model: groq/qwen/qwen3.6-27b
       api_key: os.environ/GROQ_API_KEY
-      api_base: https://api.groq.com/openai/v1
-      custom_llm_provider: openai
       
   # Backup Groq model with standard Groq provider
-  - model_name: groq-llama-backup
+  - model_name: groq-gpt-oss-backup
     litellm_params:
-      model: groq/llama3-8b-8192
+      model: groq/openai/gpt-oss-20b
       api_key: os.environ/GROQ_API_KEY
       
   # Fallback models
@@ -34,11 +32,11 @@ model_list:
 # Configure fallbacks at the router level
 router_settings:
   fallbacks:
-    - "groq-kimi-primary": ["groq-llama-backup", "gpt-4o-secondary", "gemini-third", "openrouter-fallback"]
+    - "groq-qwen-primary": ["groq-gpt-oss-backup"]
 
 litellm_settings:
   callbacks: ["mlflow"]
-  log_level: DEBUG
+  log_level: INFO
 
 callback_settings:
   mlflow:

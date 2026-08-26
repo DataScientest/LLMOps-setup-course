@@ -1,4 +1,4 @@
-.PHONY: help setup start stop restart logs clean test test-watch lint format check-env
+.PHONY: help setup start stop restart logs clean test lint format check-env
 
 # Colors
 GREEN  := $(shell tput -Txterm setaf 2)
@@ -24,46 +24,42 @@ setup: ## Copy .env.example to .env if it doesn't exist
 
 start: check-env ## Start all services
 	@echo "${GREEN}Starting LLMOps environment...${RESET}"
-	docker-compose up -d --build
+	docker compose up -d --build --wait
 	@echo "\n${GREEN}Services started successfully!${RESET}"
 	@echo "- API: http://localhost:8000"
 	@echo "- LiteLLM: http://localhost:8001"
-	@echo "- MLflow UI: http://localhost:5000"
+	@echo "- MLflow UI: http://localhost:5001"
 
 stop: ## Stop all services
 	@echo "${YELLOW}Stopping LLMOps environment...${RESET}"
-	docker-compose stop
+	docker compose stop
 
 restart: stop start ## Restart all services
 
 logs: ## View logs from all services
 	@echo "${YELLOW}Viewing logs (press Ctrl+C to exit)...${RESET}"
-	docker-compose logs -f
+	docker compose logs -f
 
 clean: ## Stop services and remove containers, volumes, and networks
 	@echo "${YELLOW}Cleaning up LLMOps environment...${RESET}"
-	docker-compose down -v --remove-orphans
+	docker compose down -v --remove-orphans
 
 ##@ Testing
 
 test: check-env ## Run integration tests
 	@echo "${GREEN}Running integration tests...${RESET}"
-	docker-compose exec api pytest /app/tests/ -v --cov=app --cov-report=term-missing
-
-test-watch: check-env ## Run tests in watch mode
-	@echo "${GREEN}Starting test watcher...${RESET}"
-	docker-compose exec api ptw /app/tests/ -- -v --cov=app --cov-report=term-missing
+	uv run --frozen pytest tests/ -v --cov=src/api --cov-report=term-missing
 
 ##@ Code Quality
 
 lint: ## Run code linter
 	@echo "${GREEN}Running code linter...${RESET}"
-	docker-compose exec api flake8 /app/src
+	uv run --frozen flake8 src
 
 format: ## Format code with black and isort
 	@echo "${GREEN}Formatting code...${RESET}"
-	docker-compose exec api black /app/src
-	docker-compose exec api isort /app/src
+	uv run --frozen black src
+	uv run --frozen isort src
 
 ##@ Utils
 
@@ -73,32 +69,26 @@ check-env:
 		exit 1; \
 	fi
 
-##@ Dependencies
-
-install-test-deps: ## Install test dependencies
-	@echo "${GREEN}Installing test dependencies...${RESET}"
-	pip install -r test-requirements.txt
-
 ##@ Documentation
 
 docs: ## Generate API documentation
 	@echo "${GREEN}Generating API documentation...${RESET}"
-	docker-compose exec api python -m pdoc --html -o /app/docs /app/src/api --force
+	uv run --frozen pdoc -o docs src/api
 
 ##@ Monitoring
 
 mlflow: check-env ## Open MLflow UI in browser
-	@open http://localhost:5000
+	@open http://localhost:5001
 
 ##@ API Examples
 
 api-test: check-env ## Test API health check
 	@echo "${GREEN}Testing API health check...${RESET}"
-	@curl -s http://localhost:8000/health | jq
+	@curl --fail --silent http://localhost:8000/health | jq
 
 api-models: check-env ## List available models
 	@echo "${GREEN}Fetching available models...${RESET}"
-	@curl -s http://localhost:8000/models | jq
+	@curl --fail --silent http://localhost:8000/models | jq
 
 api-generate: check-env ## Generate text with default model (prompt required: make api-generate PROMPT="your prompt")
 	@if [ -z "$(PROMPT)" ]; then \
@@ -106,9 +96,9 @@ api-generate: check-env ## Generate text with default model (prompt required: ma
 		exit 1; \
 	fi
 	@echo "${GREEN}Generating text with prompt: $(PROMPT)${RESET}"
-	@curl -s -X POST http://localhost:8000/generate \
+	@curl --fail --silent -X POST http://localhost:8000/generate \
 		-H "Content-Type: application/json" \
-		-d '{"prompt": "$(PROMPT)", "model": "groq-kimi-primary"}' | jq
+		-d '{"prompt": "$(PROMPT)", "model": "groq-qwen-primary"}' | jq
 
 api-generate-gemini: check-env ## Generate text with Gemini model (prompt required: make api-generate-gemini PROMPT="your prompt")
 	@if [ -z "$(PROMPT)" ]; then \
@@ -116,7 +106,7 @@ api-generate-gemini: check-env ## Generate text with Gemini model (prompt requir
 		exit 1; \
 	fi
 	@echo "${GREEN}Generating text with Gemini: $(PROMPT)${RESET}"
-	@curl -s -X POST http://localhost:8000/generate \
+	@curl --fail --silent -X POST http://localhost:8000/generate \
 		-H "Content-Type: application/json" \
 		-d '{"prompt": "$(PROMPT)", "model": "gemini-third"}' | jq
 
@@ -126,9 +116,9 @@ api-generate-groq: check-env ## Generate text with Groq model (prompt required: 
 		exit 1; \
 	fi
 	@echo "${GREEN}Generating text with Groq: $(PROMPT)${RESET}"
-	@curl -s -X POST http://localhost:8000/generate \
+	@curl --fail --silent -X POST http://localhost:8000/generate \
 		-H "Content-Type: application/json" \
-		-d '{"prompt": "$(PROMPT)", "model": "groq-kimi-primary"}' | jq
+		-d '{"prompt": "$(PROMPT)", "model": "groq-qwen-primary"}' | jq
 
 api-generate-openai: check-env ## Generate text with OpenAI model (prompt required: make api-generate-openai PROMPT="your prompt")
 	@if [ -z "$(PROMPT)" ]; then \
@@ -136,7 +126,7 @@ api-generate-openai: check-env ## Generate text with OpenAI model (prompt requir
 		exit 1; \
 	fi
 	@echo "${GREEN}Generating text with OpenAI: $(PROMPT)${RESET}"
-	@curl -s -X POST http://localhost:8000/generate \
+	@curl --fail --silent -X POST http://localhost:8000/generate \
 		-H "Content-Type: application/json" \
 		-d '{"prompt": "$(PROMPT)", "model": "gpt-4o-secondary"}' | jq
 
@@ -146,7 +136,7 @@ api-generate-openrouter: check-env ## Generate text with OpenRouter model (promp
 		exit 1; \
 	fi
 	@echo "${GREEN}Generating text with OpenRouter: $(PROMPT)${RESET}"
-	@curl -s -X POST http://localhost:8000/generate \
+	@curl --fail --silent -X POST http://localhost:8000/generate \
 		-H "Content-Type: application/json" \
 		-d '{"prompt": "$(PROMPT)", "model": "openrouter-fallback"}' | jq
 ##@ Helpers
