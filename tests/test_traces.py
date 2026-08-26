@@ -1,31 +1,36 @@
 #!/usr/bin/env python3
 
-import os
-import mlflow
+import pytest
 from mlflow.tracking import MlflowClient
 
-
+if __name__ != "__main__":
+    pytest.skip(
+        "Trace inspection requires the running MLflow service",
+        allow_module_level=True,
+    )
 
 try:
     # Create client
     client = MlflowClient()
-    
+
     # List experiments
     experiments = client.search_experiments()
     print("Available experiments:")
     for exp in experiments:
         print(f"  - {exp.name} (ID: {exp.experiment_id})")
-    
+
     # Try to search traces
     print("\nSearching for traces...")
-    
+
     # Search traces for each experiment
     for exp in experiments:
         try:
-            print(f"\nSearching traces in experiment '{exp.name}' (ID: {exp.experiment_id})...")
+            print(
+                f"\nSearching traces in experiment '{exp.name}' (ID: {exp.experiment_id})..."
+            )
             traces = client.search_traces(experiment_ids=[exp.experiment_id])
             print(f"Found {len(traces)} traces in experiment {exp.experiment_id}")
-            
+
             for trace in traces[:3]:  # Show first 3 traces
                 print(f"  - Trace ID: {trace.info.request_id}")
                 print(f"    Status: {trace.info.status}")
@@ -36,7 +41,7 @@ try:
                 if trace.data.response:
                     print(f"    Response: {str(trace.data.response)[:100]}...")
                 print("    ---")
-                
+
         except Exception as e:
             print(f"Error searching traces in experiment {exp.experiment_id}: {e}")
 
