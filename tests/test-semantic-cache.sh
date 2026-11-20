@@ -31,7 +31,7 @@ echo_info "Test 1: Premier prompt complètement nouveau"
 RESPONSE1=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-qwen-primary", "prompt": "How can I protect my REST API from attacks?", "max_tokens": 80}')
+    -d '{"model": "groq-primary", "prompt": "How can I protect my REST API from attacks?", "max_tokens": 80}')
 
 RESPONSE1_TEXT=$(echo $RESPONSE1 | jq -r '.response')
 echo "Réponse 1: $(echo $RESPONSE1_TEXT | head -c 80)..."
@@ -44,7 +44,7 @@ sleep 3  # Attendre que le cache soit indexé
 RESPONSE2=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-qwen-primary", "prompt": "What methods exist to secure a REST API against malicious requests?", "max_tokens": 80}')
+    -d '{"model": "groq-primary", "prompt": "What methods exist to secure a REST API against malicious requests?", "max_tokens": 80}')
 
 RESPONSE2_TEXT=$(echo $RESPONSE2 | jq -r '.response')
 echo "Réponse 2: $(echo $RESPONSE2_TEXT | head -c 80)..."
@@ -62,7 +62,7 @@ echo_info "Test 3: Prompt complètement différent (pas de cache attendu)"
 RESPONSE3=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-qwen-primary", "prompt": "Explain quantum computing concepts", "max_tokens": 80}')
+    -d '{"model": "groq-primary", "prompt": "Explain quantum computing concepts", "max_tokens": 80}')
 
 RESPONSE3_TEXT=$(echo $RESPONSE3 | jq -r '.response')
 echo "Réponse 3: $(echo $RESPONSE3_TEXT | head -c 80)..."

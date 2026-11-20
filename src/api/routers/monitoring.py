@@ -22,7 +22,7 @@ router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 from middleware.metrics import (
     REQUEST_COUNT, REQUEST_DURATION, REQUEST_SIZE, RESPONSE_SIZE,
     CACHE_HITS, CACHE_LATENCY, CACHE_SIMILARITY_SCORE, CACHE_SIMILARITY_QUALITY,
-    CACHE_AVG_SEMANTIC_SIMILARITY
+    CACHE_AVG_SEMANTIC_SIMILARITY, CACHE_HIT_RATIO, CACHE_PERFORMANCE_SAVINGS
 )
 
 # Additional monitoring-specific metrics
@@ -30,9 +30,10 @@ LLM_COST = Gauge('llmops_llm_cost_total', 'Total LLM cost in USD')
 LLM_TOKENS = Counter('llmops_llm_tokens_total', 'Total tokens used', ['type', 'model'])
 
 # Enhanced cache-specific metrics for detailed monitoring
-CACHE_HIT_RATIO = Gauge('llmops_cache_hit_ratio', 'Cache hit ratio by type', ['cache_type'])
+# Kept for the "Test Cache Metrics" demo dashboard only
 SEMANTIC_SIMILARITY_AVG = Gauge('llmops_semantic_similarity_average', 'Average semantic similarity score')
-CACHE_PERFORMANCE_SAVINGS = Gauge('llmops_cache_performance_savings_ms', 'Performance savings from cache hits in milliseconds', ['cache_type'])
+# CACHE_HIT_RATIO and CACHE_PERFORMANCE_SAVINGS live in middleware.metrics and
+# are updated on every /llm/generate call (see record_generation).
 
 # Basic API monitoring metrics (these already exist in middleware, just reusing them here)
 # REQUEST_COUNT, REQUEST_DURATION, etc. are imported from middleware
@@ -41,12 +42,10 @@ CACHE_PERFORMANCE_SAVINGS = Gauge('llmops_cache_performance_savings_ms', 'Perfor
 async def get_prometheus_metrics():
     """Expose Prometheus metrics endpoint with enhanced error handling."""
     try:
-        # Update metrics from MLflow asynchronously (non-blocking)
-        try:
-            await update_metrics_from_mlflow()
-        except Exception as mlflow_error:
-            logger.warning(f"MLflow metrics update failed (continuing anyway): {mlflow_error}")
-        
+        # Cache and cost metrics are recorded in-process on every
+        # /llm/generate call (middleware.metrics.record_generation). We no
+        # longer recompute them from MLflow here: that overwrote the live
+        # values with zeros on every Prometheus scrape.
         # Generate Prometheus format with fallback
         metrics_content = generate_latest()
         if not metrics_content:
@@ -207,7 +206,7 @@ async def update_metrics_from_mlflow():
                 exp_id = experiment.get("experiment_id")
                 if exp_id:
                     # Get runs for this experiment
-                    runs_response = requests.get(
+                    runs_response = requests.post(
                         f"{mlflow_uri}/api/2.0/mlflow/runs/search",
                         json={
                             "experiment_ids": [exp_id],
@@ -251,7 +250,6 @@ async def update_metrics_from_mlflow():
             
             # Update Prometheus metrics
             LLM_COST.set(total_cost)
-            LLM_TOKENS._value._value = total_tokens
             
             # Update cache hit ratios
             total_requests = cache_stats["total_requests"]
@@ -304,7 +302,7 @@ async def get_mlflow_stats():
             for experiment in experiments:
                 exp_id = experiment.get("experiment_id")
                 if exp_id:
-                    runs_response = requests.get(
+                    runs_response = requests.post(
                         f"{mlflow_uri}/api/2.0/mlflow/runs/search",
                         json={
                             "experiment_ids": [exp_id],
@@ -351,14 +349,8 @@ async def get_cache_stats():
             exact_hit_ratio = 0
             semantic_hit_ratio = 0
         
-        # Update Prometheus gauges
-        CACHE_HIT_RATIO.labels(cache_type='exact').set(exact_hit_ratio)
-        CACHE_HIT_RATIO.labels(cache_type='semantic').set(semantic_hit_ratio)
-        
-        avg_similarity = semantic_cache_stats.get("average_similarity", 0)
-        if avg_similarity > 0:
-            SEMANTIC_SIMILARITY_AVG.set(avg_similarity)
-            
+        # Read-only: the Prometheus gauges are updated per request by
+        # middleware.metrics.record_generation, not by this summary.
         return {
             "exact_cache": exact_cache_stats,
             "semantic_cache": semantic_cache_stats,
@@ -407,7 +399,7 @@ async def get_semantic_cache_stats():
             for experiment in experiments:
                 exp_id = experiment.get("experiment_id")
                 if exp_id:
-                    runs_response = requests.get(
+                    runs_response = requests.post(
                         f"{mlflow_uri}/api/2.0/mlflow/runs/search",
                         json={
                             "experiment_ids": [exp_id],
@@ -476,7 +468,7 @@ async def get_cost_summary():
             for experiment in experiments:
                 exp_id = experiment.get("experiment_id")
                 if exp_id:
-                    runs_response = requests.get(
+                    runs_response = requests.post(
                         f"{mlflow_uri}/api/2.0/mlflow/runs/search",
                         json={
                             "experiment_ids": [exp_id],

@@ -3,19 +3,31 @@
 
 model_list:
   # Primary models with security guardrails
-  - model_name: groq-qwen-primary
+  # Aliases are model-agnostic: when Groq retires a model, only the
+  # "model:" line changes. Use Groq *production* models, not preview ones
+  # (https://console.groq.com/docs/models).
+  - model_name: groq-primary
     litellm_params:
-      model: groq/qwen/qwen3.6-27b
+      model: groq/openai/gpt-oss-120b
       api_key: os.environ/GROQ_API_KEY
-
+      # gpt-oss models reason before answering; reasoning tokens count in
+      # max_tokens. "low" keeps short answers from coming back empty.
+      reasoning_effort: low
+      # LiteLLM 1.75 does not list reasoning_effort for groq: allow it explicitly,
+      # otherwise every call fails with UnsupportedParamsError (HTTP 400).
+      allowed_openai_params: ["reasoning_effort"]
     litellm_settings:
       callbacks: ["detect_prompt_injection"]
       
   # Backup Groq model with standard Groq provider
-  - model_name: groq-gpt-oss-backup
+  - model_name: groq-backup
     litellm_params:
       model: groq/openai/gpt-oss-20b
       api_key: os.environ/GROQ_API_KEY
+      reasoning_effort: low
+      # LiteLLM 1.75 does not list reasoning_effort for groq: allow it explicitly,
+      # otherwise every call fails with UnsupportedParamsError (HTTP 400).
+      allowed_openai_params: ["reasoning_effort"]
       
   # Fallback models
   - model_name: gpt-4o-secondary
@@ -25,7 +37,7 @@ model_list:
       
   - model_name: gemini-third
     litellm_params:
-      model: gemini/gemini-2.0-flash-exp
+      model: gemini/gemini-2.5-flash
       api_key: os.environ/GEMINI_API_KEY
       
   - model_name: openrouter-fallback
@@ -67,7 +79,7 @@ prompt_injection_params:
 # Router Configuration with Security
 router_settings:
   fallbacks:
-    - "groq-qwen-primary": ["groq-gpt-oss-backup"]
+    - "groq-primary": ["groq-backup"]
     
 # Callback Settings
 callback_settings:
