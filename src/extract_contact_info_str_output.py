@@ -47,7 +47,7 @@ def extract_contact_info(text):
     payload = {
         "prompt": prompt,
         "system_prompt": system_prompt,
-        "model": "groq-qwen-primary",
+        "model": "groq-primary",
         "temperature": 0.1,  # Low temperature for consistent data extraction
         "max_tokens": 150,
         "response_format": contact_schema,  # Enable structured output
