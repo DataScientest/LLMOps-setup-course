@@ -11,6 +11,9 @@ model_list:
       api_key: os.environ/GROQ_API_KEY
       # gpt-oss models reason first; reasoning tokens count in max_tokens.
       reasoning_effort: low
+      # LiteLLM 1.75 does not list reasoning_effort for groq: allow it explicitly,
+      # otherwise every call fails with UnsupportedParamsError (HTTP 400).
+      allowed_openai_params: ["reasoning_effort"]
       
   # Backup Groq model with standard Groq provider
   - model_name: groq-backup
@@ -18,6 +21,9 @@ model_list:
       model: groq/openai/gpt-oss-20b
       api_key: os.environ/GROQ_API_KEY
       reasoning_effort: low
+      # LiteLLM 1.75 does not list reasoning_effort for groq: allow it explicitly,
+      # otherwise every call fails with UnsupportedParamsError (HTTP 400).
+      allowed_openai_params: ["reasoning_effort"]
       
   # Fallback models
   - model_name: gpt-4o-secondary
