@@ -3,19 +3,22 @@
 
 model_list:
   # Primary models with security guardrails
-  - model_name: groq-qwen-primary
+  - model_name: groq-primary
     litellm_params:
-      model: groq/qwen/qwen3.6-27b
+      model: groq/openai/gpt-oss-120b
       api_key: os.environ/GROQ_API_KEY
+      # gpt-oss models reason first; reasoning tokens count in max_tokens.
+      reasoning_effort: low
     # Model-specific security settings
     litellm_settings:
       callbacks: ["detect_prompt_injection"] # , "hide_secrets" - Licensed feature
       
   # Backup Groq model with standard Groq provider
-  - model_name: groq-gpt-oss-backup
+  - model_name: groq-backup
     litellm_params:
       model: groq/openai/gpt-oss-20b
       api_key: os.environ/GROQ_API_KEY
+      reasoning_effort: low
       
   # Fallback models
   - model_name: gpt-4o-secondary
@@ -25,7 +28,7 @@ model_list:
       
   - model_name: gemini-third
     litellm_params:
-      model: gemini/gemini-2.0-flash-exp
+      model: gemini/gemini-2.5-flash
       api_key: os.environ/GEMINI_API_KEY
       
   - model_name: openrouter-fallback
@@ -113,7 +116,7 @@ litellm_settings:
 # Router Configuration with Security
 router_settings:
   fallbacks:
-    - "groq-qwen-primary": ["groq-gpt-oss-backup"]
+    - "groq-primary": ["groq-backup"]
   
   # Security policies - Licensed features
   # security_settings:
