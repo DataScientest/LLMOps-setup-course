@@ -42,7 +42,7 @@ echo "🔍 Making first call (should create cache entry)..."
 RESPONSE1=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-qwen-primary", "prompt": "What is Docker?", "max_tokens": 30}')
+    -d '{"model": "groq-primary", "prompt": "What is Docker?", "max_tokens": 200}')
 
 echo "Response: $(echo $RESPONSE1 | jq -r '.response' | head -c 50)..."
 
@@ -53,7 +53,7 @@ echo "🎯 Making second identical call (should hit exact cache)..."
 RESPONSE2=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-qwen-primary", "prompt": "What is Docker?", "max_tokens": 30}')
+    -d '{"model": "groq-primary", "prompt": "What is Docker?", "max_tokens": 200}')
 
 echo "Response: $(echo $RESPONSE2 | jq -r '.response' | head -c 50)..."
 
@@ -70,7 +70,7 @@ echo "🔍 Making first semantic call..."
 RESPONSE3=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-qwen-primary", "prompt": "How does containerization technology work?", "max_tokens": 30}')
+    -d '{"model": "groq-primary", "prompt": "How does containerization technology work?", "max_tokens": 200}')
 
 echo "Response: $(echo $RESPONSE3 | jq -r '.response' | head -c 50)..."
 
@@ -81,7 +81,7 @@ echo "🎯 Making semantically similar call..."
 RESPONSE4=$(curl --fail --silent -X POST ${API_BASE_URL}/llm/generate \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"model": "groq-qwen-primary", "prompt": "Explain container virtualization concepts", "max_tokens": 30}')
+    -d '{"model": "groq-primary", "prompt": "Explain container virtualization concepts", "max_tokens": 200}')
 
 echo "Response: $(echo $RESPONSE4 | jq -r '.response' | head -c 50)..."
 

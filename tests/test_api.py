@@ -31,7 +31,7 @@ def test_list_models():
     response = requests.get(f"{BASE_URL}/llm/models", timeout=30)
 
     response.raise_for_status()
-    assert "groq-qwen-primary" in str(response.json())
+    assert "groq-primary" in str(response.json())
 
 
 def test_generate_with_primary_model(auth_headers):
@@ -40,7 +40,7 @@ def test_generate_with_primary_model(auth_headers):
         headers=auth_headers,
         json={
             "prompt": "Reply with exactly: LLMOps E2E OK",
-            "model": "groq-qwen-primary",
+            "model": "groq-primary",
             "temperature": 0,
             "max_tokens": 20,
         },
