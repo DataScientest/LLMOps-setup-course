@@ -36,7 +36,7 @@ def test_cache_and_check_mlflow():
     # First call (no cache)
     print("2. Making first LLM call (should miss cache)...")
     payload = {
-        "model": "groq-qwen-primary",
+        "model": "groq-primary",
         "prompt": "What are the benefits of microservices architecture?",
         "max_tokens": 50,
     }
@@ -58,7 +58,7 @@ def test_cache_and_check_mlflow():
     # Third call (semantic cache test)
     print("4. Making semantically similar call...")
     payload_semantic = {
-        "model": "groq-qwen-primary",
+        "model": "groq-primary",
         "prompt": "What are the advantages of using microservices?",
         "max_tokens": 50,
     }

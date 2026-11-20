@@ -16,13 +16,15 @@ echo "Cleaning up existing collections..."
 curl -X DELETE "http://qdrant:6333/collections/exact_cache" 2>/dev/null || true
 curl -X DELETE "http://qdrant:6333/collections/litellm_semantic_cache" 2>/dev/null || true
 
-# Create exact_cache collection for API (dimension 384 for all-MiniLM-L6-v2)
-echo "Creating exact_cache collection with 384 dimensions..."
+# Create exact_cache collection for API.
+# The exact cache is a key/value lookup (MD5 of the prompt): it stores a dummy
+# 1-dimension vector, see src/api/cache/exact_cache.py. Do not use 384 here.
+echo "Creating exact_cache collection with 1 dimension (key/value lookup)..."
 curl -X PUT "http://qdrant:6333/collections/exact_cache" \
   -H "Content-Type: application/json" \
   -d '{
     "vectors": {
-      "size": 384,
+      "size": 1,
       "distance": "Cosine"
     }
   }'
