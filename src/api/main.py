@@ -38,9 +38,9 @@ def get_default_model():
 
         logger.debug(f" Available models: {available_models}")
 
-        # Priority order: Groq Qwen first, then optional providers
+        # Priority order: Groq primary first, then optional providers
         priority_models = [
-            "groq-qwen-primary",
+            "groq-primary",
             "gpt-4o-secondary",
             "gemini-third",
             "openrouter-fallback",
@@ -54,8 +54,8 @@ def get_default_model():
     except Exception as e:
         logger.debug(f" Error getting models: {e}")
 
-    logger.debug(" Using fallback: groq-qwen-primary")
-    return "groq-qwen-primary"
+    logger.debug(" Using fallback: groq-primary")
+    return "groq-primary"
 
 
 # --- Pydantic Models for API requests and responses ---
