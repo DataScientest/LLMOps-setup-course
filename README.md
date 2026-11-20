@@ -13,7 +13,7 @@ This repository demonstrates an LLM application with model fallback, monitoring,
 - Docker and Docker Compose
 - uv
 - API keys for:
-  - Groq (required for the primary Qwen model)
+  - Groq (required for the primary model)
   - OpenAI, Gemini, and OpenRouter (optional routes)
 
 ## Quick Start
@@ -44,7 +44,7 @@ Content-Type: application/json
 
 {
   "prompt": "Your prompt here",
-  "model": "groq-qwen-primary",
+  "model": "groq-primary",
   "temperature": 0.7
 }
 ```
@@ -61,8 +61,8 @@ GET /health
 
 ## Model Fallback Strategy
 
-1. **Primary**: `groq-qwen-primary` (`qwen/qwen3.6-27b`)
-2. **Fallback**: `groq-gpt-oss-backup` (`openai/gpt-oss-20b`)
+1. **Primary**: `groq-primary` (`openai/gpt-oss-120b`)
+2. **Fallback**: `groq-backup` (`openai/gpt-oss-20b`)
 
 The other provider routes remain available explicitly when their keys are configured.
 
