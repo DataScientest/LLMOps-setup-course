@@ -13,6 +13,9 @@ model_list:
       # gpt-oss models reason before answering; reasoning tokens count in
       # max_tokens. "low" keeps short answers from coming back empty.
       reasoning_effort: low
+      # LiteLLM 1.75 does not list reasoning_effort for groq: allow it explicitly,
+      # otherwise every call fails with UnsupportedParamsError (HTTP 400).
+      allowed_openai_params: ["reasoning_effort"]
     litellm_settings:
       callbacks: ["detect_prompt_injection"]
       
@@ -22,6 +25,9 @@ model_list:
       model: groq/openai/gpt-oss-20b
       api_key: os.environ/GROQ_API_KEY
       reasoning_effort: low
+      # LiteLLM 1.75 does not list reasoning_effort for groq: allow it explicitly,
+      # otherwise every call fails with UnsupportedParamsError (HTTP 400).
+      allowed_openai_params: ["reasoning_effort"]
       
   # Fallback models
   - model_name: gpt-4o-secondary
