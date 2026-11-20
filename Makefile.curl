@@ -56,7 +56,7 @@ test-semantic-cache:
 	@curl -s -X POST http://localhost:8000/llm/generate \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $(TOKEN)" \
-		-d '{"model": "groq-primary", "prompt": "Why is it crucial to encrypt stored data?", "max_tokens": 300}' \
+		-d '{"model": "groq-primary", "prompt": "Explain why data encryption at rest is important.", "max_tokens": 300}' \
 		| jq -C '.'
 	@echo $(SEPARATOR)
 
@@ -120,7 +120,7 @@ check-mlflow:
 
 check-tei:
 	@echo "🔤 Checking TEI embeddings service..."
-	@curl -s "http://localhost:8080/health" | jq '.'
+	@curl --fail --silent "http://localhost:8080/health" && echo "TEI healthy"
 
 check-litellm:
 	@echo "🤖 Checking LiteLLM proxy..."
