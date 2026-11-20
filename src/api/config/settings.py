@@ -27,9 +27,9 @@ def get_default_model():
 
         logger.debug("Available models: %s", available_models)
 
-        # Priority order: Groq Qwen first, then fallbacks
+        # Priority order: Groq primary first, then fallbacks
         priority_models = [
-            "groq-qwen-primary",
+            "groq-primary",
             "gpt-4o-secondary",
             "gemini-third",
             "openrouter-fallback",
@@ -43,8 +43,8 @@ def get_default_model():
     except Exception as e:
         logger.debug("Could not retrieve models: %s", e)
 
-    logger.debug("Using fallback model groq-qwen-primary")
-    return "groq-qwen-primary"
+    logger.debug("Using fallback model groq-primary")
+    return "groq-primary"
 
 
 class Settings:
@@ -76,6 +76,8 @@ class Settings:
     QDRANT_URL: str = os.getenv("QDRANT_URL", "http://qdrant:6333")
     TEI_URL: str = os.getenv("TEI_URL", "http://tei-embeddings:80")
     CACHE_TTL: int = int(os.getenv("CACHE_TTL", "1800"))  # 30 minutes default
+    # Must match similarity_threshold in litellm/litellm-config-security.yaml
+    SEMANTIC_CACHE_THRESHOLD: float = float(os.getenv("SEMANTIC_CACHE_THRESHOLD", "0.7"))
 
 
 # Security Configuration
