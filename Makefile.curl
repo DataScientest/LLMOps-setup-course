@@ -32,7 +32,7 @@ test-exact-cache:
 	@curl --fail --silent -X POST $(API_BASE_URL)/llm/generate \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $(TOKEN)" \
-		-d '{"model": "groq-qwen-primary", "prompt": "Why the sky is blue?", "max_tokens": 10}' \
+		-d '{"model": "groq-primary", "prompt": "Why the sky is blue?", "max_tokens": 200}' \
 		| jq -C '.'
 	@echo ""
 	@echo "🎯 Test 2: Second call (exact cache hit expected)"
@@ -40,7 +40,7 @@ test-exact-cache:
 	@curl --fail --silent -X POST $(API_BASE_URL)/llm/generate \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $(TOKEN)" \
-		-d '{"model": "groq-qwen-primary", "prompt": "Why the sky is blue?", "max_tokens": 10}' \
+		-d '{"model": "groq-primary", "prompt": "Why the sky is blue?", "max_tokens": 200}' \
 		| jq -C '.'
 	@echo $(SEPARATOR)
 
@@ -55,7 +55,7 @@ test-semantic-cache:
 	@curl --fail --silent -X POST $(API_BASE_URL)/llm/generate \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $(TOKEN)" \
-		-d '{"model": "groq-qwen-primary", "prompt": "Explain the importance of data encryption at rest.", "max_tokens": 80}' \
+		-d '{"model": "groq-primary", "prompt": "Explain the importance of data encryption at rest.", "max_tokens": 300}' \
 		| jq -C '.'
 	@echo ""
 	@echo "🎯 Test 2: Semantically similar call (semantic cache hit expected)"
@@ -63,7 +63,7 @@ test-semantic-cache:
 	@curl --fail --silent -X POST $(API_BASE_URL)/llm/generate \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $(TOKEN)" \
-		-d '{"model": "groq-qwen-primary", "prompt": "Why is it crucial to encrypt stored data?", "max_tokens": 80}' \
+		-d '{"model": "groq-primary", "prompt": "Explain why data encryption at rest is important.", "max_tokens": 300}' \
 		| jq -C '.'
 	@echo $(SEPARATOR)
 
@@ -127,7 +127,7 @@ check-mlflow:
 
 check-tei:
 	@echo "🔤 Checking TEI embeddings service..."
-	@curl --fail --silent "http://localhost:$(TEI_PORT)/health" | jq '.'
+	@curl --fail --silent "http://localhost:$(TEI_PORT)/health" && echo "TEI healthy"
 
 check-litellm:
 	@echo "🤖 Checking LiteLLM proxy..."

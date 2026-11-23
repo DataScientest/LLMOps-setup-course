@@ -65,6 +65,91 @@ CACHE_AVG_SEMANTIC_SIMILARITY = Gauge(
     'Average semantic similarity score for cache hits'
 )
 
+CACHE_MISSES = Counter(
+    'llmops_cache_misses_total',
+    'Requests answered by the LLM (no exact or semantic cache hit)'
+)
+
+CACHE_HIT_RATIO = Gauge(
+    'llmops_cache_hit_ratio',
+    'Share of /llm/generate requests served by each cache type',
+    ['cache_type']
+)
+
+CACHE_PERFORMANCE_SAVINGS = Gauge(
+    'llmops_cache_performance_savings_ms',
+    'Estimated LLM time saved by cache hits, in milliseconds',
+    ['cache_type']
+)
+
+LLM_COST_USD = Counter(
+    'llmops_llm_cost_usd_total',
+    'Cumulated LLM cost in USD (cache hits cost nothing)',
+    ['model']
+)
+
+LLM_CALL_DURATION = Histogram(
+    'llmops_llm_call_duration_seconds',
+    'Duration of real LLM calls (cache misses only)'
+)
+
+# Create every label value at startup so Grafana shows 0 instead of
+# "No data" before the first hit of each kind.
+for _kind in ("exact", "semantic"):
+    CACHE_HITS.labels(cache_type=_kind)
+    CACHE_HIT_RATIO.labels(cache_type=_kind)
+    CACHE_PERFORMANCE_SAVINGS.labels(cache_type=_kind)
+for _quality in ("excellent", "good", "fair", "poor"):
+    CACHE_SIMILARITY_QUALITY.labels(quality=_quality)
+
+# In-process counters used to compute the hit ratios.
+_cache_counts = {"exact": 0, "semantic": 0, "miss": 0}
+_llm_durations_ms = []
+
+
+def record_generation(cache_type, duration_s, cost=0.0, model="unknown", similarity=None):
+    """Record one /llm/generate call in the Prometheus metrics.
+
+    cache_type is "exact", "semantic" or None (cache miss, real LLM call).
+    """
+    if cache_type in ("exact", "semantic"):
+        CACHE_HITS.labels(cache_type=cache_type).inc()
+        CACHE_LATENCY.labels(cache_type=cache_type).observe(duration_s)
+        _cache_counts[cache_type] += 1
+        if cache_type == "semantic" and similarity is not None:
+            CACHE_SIMILARITY_SCORE.observe(similarity)
+            if similarity >= 0.95:
+                quality = "excellent"
+            elif similarity >= 0.85:
+                quality = "good"
+            elif similarity >= 0.75:
+                quality = "fair"
+            else:
+                quality = "poor"
+            CACHE_SIMILARITY_QUALITY.labels(quality=quality).inc()
+            # Running average over the semantic hits seen so far
+            n = _cache_counts["semantic"]
+            current = CACHE_AVG_SEMANTIC_SIMILARITY._value.get()
+            CACHE_AVG_SEMANTIC_SIMILARITY.set(current + (similarity - current) / n)
+    else:
+        CACHE_MISSES.inc()
+        LLM_CALL_DURATION.observe(duration_s)
+        _cache_counts["miss"] += 1
+        _llm_durations_ms.append(duration_s * 1000)
+        if cost:
+            LLM_COST_USD.labels(model=model).inc(cost)
+
+    total = sum(_cache_counts.values())
+    for kind in ("exact", "semantic"):
+        CACHE_HIT_RATIO.labels(cache_type=kind).set(_cache_counts[kind] / total)
+
+    # Savings = hits x (average real LLM latency - cache latency, approximated as 0)
+    if _llm_durations_ms:
+        avg_llm_ms = sum(_llm_durations_ms) / len(_llm_durations_ms)
+        for kind in ("exact", "semantic"):
+            CACHE_PERFORMANCE_SAVINGS.labels(cache_type=kind).set(_cache_counts[kind] * avg_llm_ms)
+
+
 def _get_endpoint_from_request(request: Request) -> str:
     """Extract and normalize endpoint path from request."""
     endpoint = str(request.url.path)

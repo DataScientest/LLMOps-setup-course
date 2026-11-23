@@ -217,7 +217,10 @@ class SecurePromptRequest(BaseModel):
 
 class SecurePromptResponse(BaseModel):
     response: str
-    model: str
+    model: str = Field(description="Model that actually produced the answer (after any fallback)")
+    requested_model: str = Field(description="Model alias sent in the request")
+    cache_hit: bool = Field(False, description="True when the answer comes from a cache")
+    cache_type: Optional[str] = Field(None, description='"exact", "semantic" or null (real LLM call)')
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int

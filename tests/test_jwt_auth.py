@@ -44,7 +44,7 @@ def test_invalid_login():
 def test_secured_endpoint_without_token():
     response = requests.post(
         f"{BASE_URL}/llm/generate",
-        json={"model": "groq-qwen-primary", "prompt": "Hello"},
+        json={"model": "groq-primary", "prompt": "Hello"},
         timeout=10,
     )
 
