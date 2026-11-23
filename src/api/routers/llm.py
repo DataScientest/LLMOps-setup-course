@@ -84,24 +84,42 @@ async def generate_secure_prompt(
             total_tokens = cached_response["total_tokens"]
             cost = cached_response["cost"]
             guardrails_triggered = cached_response.get("guardrails_triggered", [])
+            served_model = cached_response.get("model", request.model)
+            cache_type = "exact"
         else:
             # No exact cache hit, let LiteLLM handle semantic cache + LLM call
             logger.debug("No exact cache hit; calling LiteLLM")
-            response = client.chat.completions.create(**litellm_params)
+            raw = client.chat.completions.with_raw_response.create(**litellm_params)
+            response = raw.parse()
+            # LiteLLM sends the best similarity found in its semantic cache
+            # (Qdrant) in a response header, on hits AND misses. It is a hit
+            # only when that score reaches the threshold set in
+            # litellm-config-security.yaml (similarity_threshold).
+            semantic_similarity = None
+            similarity_header = raw.headers.get("x-litellm-semantic-similarity")
+            try:
+                score = float(similarity_header)
+            except (TypeError, ValueError):
+                score = None
+            if score is not None and score >= settings.SEMANTIC_CACHE_THRESHOLD:
+                semantic_similarity = score
+            cache_type = "semantic" if semantic_similarity is not None else None
 
             # Extract response data
-            response_text = response.choices[0].message.content
+            # Reasoning models can spend the whole max_tokens budget on hidden
+            # reasoning and return no content: never return None to the client.
+            response_text = response.choices[0].message.content or ""
             prompt_tokens = response.usage.prompt_tokens
             completion_tokens = response.usage.completion_tokens
             total_tokens = response.usage.total_tokens
 
+            # LiteLLM returns the model that really answered: after a fallback
+            # it differs from the alias requested by the client.
+            served_model = getattr(response, "model", None) or request.model
+
             # Calculate cost
             try:
-                # Try to get the underlying model from LiteLLM response
-                actual_model = (
-                    response.model if hasattr(response, "model") else request.model
-                )
-                cost = completion_cost(completion_response=response, model=actual_model)
+                cost = completion_cost(completion_response=response, model=served_model)
             except Exception as e:
                 logger.warning("Could not calculate cost for %s: %s", request.model, e)
                 # Fallback cost calculation based on token usage
@@ -115,6 +133,7 @@ async def generate_secure_prompt(
             # Store in exact cache (outside of except block)
             response_data = {
                 "response": response_text,
+                "model": served_model,
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
                 "total_tokens": total_tokens,
@@ -136,13 +155,8 @@ async def generate_secure_prompt(
         response_time = end_time - start_time
 
         # Determine cache status and cache latency
-        cache_hit = cached_response is not None
-        cache_latency_ms = None
-        cache_type = None
-
-        if cached_response:
-            cache_latency_ms = response_time * 1000  # Convert to milliseconds
-            cache_type = "exact"
+        cache_hit = cache_type is not None
+        cache_latency_ms = response_time * 1000 if cache_hit else None
 
         # Trace in MLflow with cache information
         try:
@@ -169,7 +183,10 @@ async def generate_secure_prompt(
 
         return SecurePromptResponse(
             response=response_text,
-            model=request.model,
+            model=served_model,
+            requested_model=request.model,
+            cache_hit=cache_hit,
+            cache_type=cache_type,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,

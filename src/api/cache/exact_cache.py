@@ -44,6 +44,20 @@ class ExactCache:
             collections = self.qdrant_client.get_collections()
             collection_names = [c.name for c in collections.collections]
 
+            if self.collection_name in collection_names:
+                # A collection created with another vector size (e.g. 384 by an
+                # older init script) rejects every write: recreate it.
+                info = self.qdrant_client.get_collection(self.collection_name)
+                vectors = info.config.params.vectors
+                size = getattr(vectors, "size", None)
+                if size != 1:
+                    logger.warning(
+                        "Exact cache collection has vector size %s instead of 1, recreating it",
+                        size,
+                    )
+                    self.qdrant_client.delete_collection(self.collection_name)
+                    collection_names.remove(self.collection_name)
+
             if self.collection_name not in collection_names:
                 # Create collection with minimal vector size (1) since we don't use embeddings
                 self.qdrant_client.create_collection(
@@ -142,6 +156,18 @@ class ExactCache:
         except Exception as e:
             logger.error(f"Error setting exact cache: {e}")
             return False
+
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Return basic statistics about the exact cache collection."""
+        count = self.qdrant_client.count(collection_name=self.collection_name).count
+        return {
+            "exact_cache": {
+                "collection": self.collection_name,
+                "entries": count,
+                "ttl_seconds": self.ttl,
+            },
+            "semantic_cache": "managed by LiteLLM (collection litellm_semantic_cache)",
+        }
 
     def clear(self) -> bool:
         """
