@@ -1,17 +1,28 @@
 # LiteLLM Proxy Configuration
 
 model_list:
-  # Primary Qwen model through Groq
-  - model_name: groq-qwen-primary
+  # Primary model through Groq. Aliases are model-agnostic: when Groq
+  # retires a model, only the "model:" line changes. Use Groq production
+  # models, not preview ones (https://console.groq.com/docs/models).
+  - model_name: groq-primary
     litellm_params:
-      model: groq/qwen/qwen3.6-27b
+      model: groq/openai/gpt-oss-120b
       api_key: os.environ/GROQ_API_KEY
+      # gpt-oss models reason first; reasoning tokens count in max_tokens.
+      reasoning_effort: low
+      # LiteLLM 1.75 does not list reasoning_effort for groq: allow it explicitly,
+      # otherwise every call fails with UnsupportedParamsError (HTTP 400).
+      allowed_openai_params: ["reasoning_effort"]
       
   # Backup Groq model with standard Groq provider
-  - model_name: groq-gpt-oss-backup
+  - model_name: groq-backup
     litellm_params:
       model: groq/openai/gpt-oss-20b
       api_key: os.environ/GROQ_API_KEY
+      reasoning_effort: low
+      # LiteLLM 1.75 does not list reasoning_effort for groq: allow it explicitly,
+      # otherwise every call fails with UnsupportedParamsError (HTTP 400).
+      allowed_openai_params: ["reasoning_effort"]
       
   # Fallback models
   - model_name: gpt-4o-secondary
@@ -32,7 +43,7 @@ model_list:
 # Configure fallbacks at the router level
 router_settings:
   fallbacks:
-    - "groq-qwen-primary": ["groq-gpt-oss-backup"]
+    - "groq-primary": ["groq-backup"]
 
 litellm_settings:
   callbacks: ["mlflow"]
